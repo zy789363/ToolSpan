@@ -122,7 +122,7 @@ describe("production runner registry", () => {
       workspaces.close();
       await rm(fixtureRoot, { recursive: true, force: true });
     }
-  }, 15_000);
+  });
 
   it("provides every runner named by the product contract", () => {
     expect(Object.keys(createProductionRunners()).sort()).toEqual([

@@ -5,5 +5,6 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     restoreMocks: true,
+    testTimeout: process.env.CI === "true" ? 15_000 : 5_000,
   },
 });

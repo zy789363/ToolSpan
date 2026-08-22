@@ -140,7 +140,7 @@ describe("artifact service", () => {
       await jobs.close();
       workspaces.close();
     }
-  }, 15_000);
+  });
 
   it("creates expiring preview links and stable published links without storing raw tokens", async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), "toolspan-artifact-links-"));
