@@ -62,6 +62,8 @@ async function main() {
     assert(tuples.size === 3, `${name} matrix must contain only the three required Core environments`);
     const commands = core.steps.filter((step) => typeof step.run === "string").map((step) => step.run);
     assert(commands.includes("npm ci"), `${name} must perform a clean install`);
+    assert(commands.some((command) => command.includes("examples/goal-state.example.json")
+      && command.includes(".toolspan-dev/goal-state.json")), `${name} Core job must initialize local goal state`);
     assert(commands.includes("npm run verify:core"), `${name} must run deterministic Core verification`);
 
     const desktop = workflow.jobs["desktop-source"];
@@ -76,6 +78,8 @@ async function main() {
     assert(desktopTuples.size === 2, `${name} Desktop matrix must contain only Ubuntu and Windows Node 24`);
     const desktopCommands = desktop.steps.filter((step) => typeof step.run === "string").map((step) => step.run);
     assert(desktopCommands.includes("npm ci"), `${name} Desktop job must clean-install Core`);
+    assert(desktopCommands.some((command) => command.includes("examples/goal-state.example.json")
+      && command.includes(".toolspan-dev/goal-state.json")), `${name} Desktop job must initialize local goal state`);
     assert(desktopCommands.includes("npm run verify:desktop:source"), `${name} must verify Desktop source`);
     assert(desktopCommands.some((command) => command.includes("npm run verify:desktop:windows")
       && command.includes("$LASTEXITCODE") && command.includes("-eq 2")),

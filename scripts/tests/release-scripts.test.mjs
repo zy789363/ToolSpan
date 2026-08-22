@@ -264,6 +264,8 @@ test("repository ignores root dotenv files and every dotenv variant", async () =
   assert.ok(rules.includes(".env.*"), "root .env.* variants must be ignored");
   assert.ok(rules.includes("/state/"), "runtime state must be ignored only at repository root");
   assert.ok(!rules.includes("state/"), "nested source state directories must remain trackable");
+  const attributes = await readFile(path.join(projectRoot, ".gitattributes"), "utf8");
+  assert.match(attributes, /^tests\/e2e-fixtures\/remote-workspace\/writable\.txt text eol=lf$/mu);
 });
 
 test("package policy rejects nested .env segments without rejecting .environment", () => {

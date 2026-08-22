@@ -56,6 +56,10 @@
           "run": "npm ci"
         },
         {
+          "name": "Initialize local goal state",
+          "run": "node -e \"const fs=require('node:fs');fs.mkdirSync('.toolspan-dev',{recursive:true});fs.copyFileSync('examples/goal-state.example.json','.toolspan-dev/goal-state.json');\""
+        },
+        {
           "name": "Verify Core",
           "run": "npm run verify:core"
         }
@@ -107,6 +111,10 @@
         {
           "name": "Clean install Core",
           "run": "npm ci"
+        },
+        {
+          "name": "Initialize local goal state",
+          "run": "node -e \"const fs=require('node:fs');fs.mkdirSync('.toolspan-dev',{recursive:true});fs.copyFileSync('examples/goal-state.example.json','.toolspan-dev/goal-state.json');\""
         },
         {
           "name": "Verify Desktop source",
@@ -170,6 +178,10 @@
         {
           "name": "Clean install Core",
           "run": "npm ci"
+        },
+        {
+          "name": "Initialize local goal state",
+          "run": "node -e \"const fs=require('node:fs');fs.mkdirSync('.toolspan-dev',{recursive:true});fs.copyFileSync('examples/goal-state.example.json','.toolspan-dev/goal-state.json');\""
         },
         {
           "name": "Verify Setup source without external credentials",
