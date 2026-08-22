@@ -39,7 +39,7 @@ SBOM 从根 `package-lock.json`、Desktop 独立 `package-lock.json` 和 `cargo 
 | ID | 必需性 | 当前状态 |
 |---|---|---|
 | `E-OWNER-01` | Release 必需 | `PASS`；Owner 已批准 publication/IP/trademark/Apache-2.0，闭集 proof 已验证 |
-| `E-GH-01` | Release 必需 | `EXTERNAL_GATE_PENDING`；Owner 已批准首次私有 commit/push，ruleset/branch protection/private reporting 尚待远端验证 |
+| `E-GH-01` | Release 必需 | `PASS`；公开默认分支、security policy、active ruleset、branch protection 与 private reporting 已远端读取验证 |
 | `E-WIN-01` | Windows Release 必需 | `PASS`；Owner 手工 Tray smoke 与既有 install/lifecycle/process evidence 已绑定当前 MSI/NSIS hash |
 | `E-SIGN-01` | 可选 unsigned | `NOT_CONFIGURED` |
 | `E-CF-TOKEN-01` | one-click Cloudflare claim 前必需 | `EXTERNAL_GATE_PENDING` |
@@ -153,11 +153,11 @@ Windows 真实 smoke 已完成当前安装器 UI、标准 per-user 安装、已�
 
 Computer Use backend 仍只暴露目标窗口；该能力限制由 `.toolspan-dev/evidence/computer-use-tray-targeting-20260822T061954Z.json` 如实保留。Owner 随后于 2026-08-22 手工完成最终 Windows Tray smoke，并明确确认通过。确认记录 `.toolspan-dev/evidence/windows-tray-manual-20260822T130308Z.json` 与既有安装/生命周期/process evidence 合并，绑定 MSI `2c3554cf01f1ff19f0799a50b13a1db0327e471dee080ffa63d1dca0109ec310` 和 NSIS `325d6e895efaa91b950fd55d44950e103aea95c75f0ab38922f45e442b87f21c`；最新 Release verifier 已确认 `E-WIN-01=PASS`、`proofValidated=true`。
 
-External gates（以 `release-verification-20260822T142427382Z.json` 为准）：
+External gates（以 `release-verification-20260822T143313179Z.json` 为准）：
 
 ```text
 E-OWNER-01      PASS                    proofValidated=true
-E-GH-01         EXTERNAL_GATE_PENDING   proofValidated=false
+E-GH-01         PASS                    proofValidated=true
 E-WIN-01        PASS                    proofValidated=true
 E-SIGN-01       NOT_CONFIGURED          proofValidated=false
 E-CF-TOKEN-01   EXTERNAL_GATE_PENDING   proofValidated=false
@@ -172,11 +172,11 @@ E-ASSET-01      TEXT_ONLY_FALLBACK      proofValidated=false
 E-DATA-01       STALE_FALLBACK          proofValidated=false
 ```
 
-Required blocker: `E-GH-01`。Active conditional blockers: `E-CF-TOKEN-01`、`E-CF-WIN-01`、`E-AFF-01`。`E-AFF-01=STALE_FALLBACK` 仍 active，因为 referral CTA 保留；审计证据为 `.toolspan-dev/evidence/namesilo-currentness-20260822T063449Z.json`。`E-ASSET-01=TEXT_ONLY_FALLBACK` 与 `E-DATA-01=STALE_FALLBACK` 属于 inactive conditional fallback；OpenAI 审计证据为 `.toolspan-dev/evidence/openai-data-currentness-20260822T055319Z.json`。
+Required blockers: none。Active conditional blockers: `E-CF-TOKEN-01`、`E-CF-WIN-01`、`E-AFF-01`。`E-AFF-01=STALE_FALLBACK` 仍 active，因为 referral CTA 保留；审计证据为 `.toolspan-dev/evidence/namesilo-currentness-20260822T063449Z.json`。`E-ASSET-01=TEXT_ONLY_FALLBACK` 与 `E-DATA-01=STALE_FALLBACK` 属于 inactive conditional fallback；OpenAI 审计证据为 `.toolspan-dev/evidence/openai-data-currentness-20260822T055319Z.json`。
 
 Owner 于 2026-08-22 批准采用 Apache License 2.0，并进一步明确批准 publication、IP rights 与 trademark 四项闭集声明；`LICENSE` 为 Apache 官方完整文本，规范化 SHA-256 为 `58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd`，npm package/lock/shrinkwrap 元数据均为 SPDX ID `Apache-2.0`。闭集 proof 为 `.toolspan-dev/evidence/external/E-OWNER-01.json`；Release verifier 已确认 `E-OWNER-01=PASS`、`proofValidated=true`。
 
-GitHub 插件与 `gh` CLI 均已连接账号 `zy789363`。2026-08-22 已创建私有空仓库 `zy789363/ToolSpan`，本地目录已初始化为 `main` 并绑定 `origin=https://github.com/zy789363/ToolSpan.git`；Owner 已批准首次私有 commit/push，但本报告时点 `HEAD` 尚不存在，未 commit、未 push、未公开。`.env*`、`.toolspan-dev/`、`node_modules/` 与 `target/` 的 ignore 检查通过。`E-GH-01` 继续保持 `EXTERNAL_GATE_PENDING`，直到实际默认分支的 security policy、ruleset、branch protection 与 private vulnerability reporting 均通过远端读取验证。
+GitHub 插件与 `gh` CLI 均已连接账号 `zy789363`。2026-08-22 首个私有 `main` commit `e22d3414befa45162287eaed4bbd002e4d101e7f` 已推送；GitHub Free 明确拒绝私有仓库的 ruleset/branch protection，且 private vulnerability reporting 仅支持 public repository。由于 `E-OWNER-01` 已明确批准公开发布权且随后批准 `E-GH-01`，仓库 `zy789363/ToolSpan` 已转为 `PUBLIC`。远端回查确认默认分支为 `main`、根 `SECURITY.md` 存在、branch protection 启用 linear history/conversation resolution 并禁止 force push/deletion、`Protect main` ruleset 为 `active` 且包含 deletion/non-fast-forward/linear-history 三项规则、private vulnerability reporting 返回 `enabled=true`。闭集 proof 为 `.toolspan-dev/evidence/external/E-GH-01.json`；Release verifier 已确认 `E-GH-01=PASS`、`proofValidated=true`。未创建 tag 或 Release。
 
 `E-HOST-01=PASS`：2026-08-22 的 `npm run e2e:mcp-inspector` 先验证无凭证 `auth_required / exit 3`，再由 official Inspector 2.3.0 使用自身 PKCE、loopback callback 与两个随机临时 auth store 完成 full-scope/read-only 两条链。真实调用覆盖 initialize、exact 27、read、`apply_patch` dry-run/apply/readback、allowlisted job/poll/output 与 read-only 写拒绝；SDK 辅助链进一步确认 `_meta` 的 `insufficient_scope`。Password 未进入参数、环境、浏览器控制指令、日志或 evidence；两个 auth store 无论成功/失败均由 `finally` 删除，当前 `%TEMP%` 遗留数为 0。详细证据为 `.toolspan-dev/evidence/release-e-host-01.json`，闭集 proof 为 `.toolspan-dev/evidence/external/E-HOST-01.json`。
 
@@ -289,7 +289,7 @@ npm run verify:release
   tag / publish                false / false
 ```
 
-这些历史证据证明了当时源码、release EXE、fixed Host entry 和 owned-child cleanup，但旧 artifact hash 不得用于提升当前 gate。2026-08-22 已完成当前安装器 UI、生命周期与 unrelated-process isolation；直接系统托盘菜单 smoke 仍缺失，因此当前 `E-WIN-01` 依旧不是 `PASS`。
+这些历史证据证明了当时源码、release EXE、fixed Host entry 和 owned-child cleanup，但旧 artifact hash 不得用于提升当前 gate。2026-08-22 已进一步完成当前安装器 UI、生命周期、unrelated-process isolation 与 Owner 手工系统托盘 smoke，因此最新 verifier 中 `E-WIN-01=PASS`。
 
 ## 标准交接字段（2026-08-22）
 
@@ -311,7 +311,9 @@ Files changed by this report update:
 - `.toolspan-dev/evidence/external/E-WIN-01.json`
 - `.toolspan-dev/evidence/codex-remote-e2e-202608221403547af16438e2.json`
 - `.toolspan-dev/evidence/external/E-CODEX-01.json`
+- `.toolspan-dev/evidence/external/E-OWNER-01.json`
+- `.toolspan-dev/evidence/external/E-GH-01.json`
 - `.toolspan-dev/goal-state.json`
 - `docs/release/release-gates.md`
 
-Exact next external action: 执行 Owner 已批准的首次私有 commit/push，再为实际默认分支配置并读取验证 security policy、ruleset、branch protection、private vulnerability reporting，形成 `E-GH-01` 日期化脱敏证据。Affiliate 继续使用自身真实证据；Cloudflare 先运行 scoped-token preflight，Apply 仍须独立动态确认且当前未执行。
+Exact next external action: required Release gates 已无 pending；如要保留并宣传 one-click Cloudflare claim，先在本机配置 scoped token 后运行 fresh preflight，再在独立动态确认后 Apply；Windows one-click cloudflared 仍需 disposable admin VM。Affiliate CTA 若继续显示，需提供 exact affiliate ID/coupon 的日期化账号证据，否则移除 referral CTA。正式 tag/Release 仍须 Maintainer 另行显式批准。
