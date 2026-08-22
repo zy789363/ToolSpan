@@ -39,23 +39,26 @@ export function executableCandidates(name, environment = process.env, platform =
     const actual = Object.keys(environment).find((item) => item.toLowerCase() === key.toLowerCase());
     return actual === undefined ? undefined : environment[actual];
   };
-  const directories = String(value("PATH") ?? "").split(path.delimiter).filter(Boolean);
+  const pathApi = platform === "win32" ? path.win32 : path.posix;
+  const directories = String(value("PATH") ?? "").split(pathApi.delimiter).filter(Boolean);
   const suffixes = platform === "win32"
     ? String(value("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean)
     : [""];
-  return directories.flatMap((directory) => suffixes.map((suffix) => path.resolve(
+  return directories.flatMap((directory) => suffixes.map((suffix) => pathApi.resolve(
     directory,
     platform === "win32" ? `${name}${suffix}` : name,
   )));
 }
 
 export async function resolveExecutable(name, options = {}) {
+  const platform = options.platform ?? process.platform;
+  const pathApi = platform === "win32" ? path.win32 : path.posix;
   const candidates = [
     ...(options.explicitCandidates ?? []),
-    ...executableCandidates(name, options.environment ?? process.env, options.platform ?? process.platform),
+    ...executableCandidates(name, options.environment ?? process.env, platform),
   ];
   for (const candidate of candidates) {
-    if (typeof candidate === "string" && await isFile(candidate)) return path.resolve(candidate);
+    if (typeof candidate === "string" && await isFile(candidate)) return pathApi.resolve(candidate);
   }
   return null;
 }
@@ -147,13 +150,13 @@ export async function npmCommand(arguments_, options = {}) {
 export function vsWhereCandidates(environment = process.env) {
   const roots = [environment["ProgramFiles(x86)"], environment.ProgramFiles]
     .filter((item) => typeof item === "string" && item.length > 0);
-  return [...new Set(roots.map((root) => path.join(root, "Microsoft Visual Studio", "Installer", "vswhere.exe")))];
+  return [...new Set(roots.map((root) => path.win32.join(root, "Microsoft Visual Studio", "Installer", "vswhere.exe")))];
 }
 
 export function parseVsWhereInstallationPath(stdout) {
   const lines = String(stdout).split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
-  if (lines.length !== 1 || !path.isAbsolute(lines[0])) return null;
-  return path.normalize(lines[0]);
+  if (lines.length !== 1 || !path.win32.isAbsolute(lines[0])) return null;
+  return path.win32.normalize(lines[0]);
 }
 
 export async function findVisualStudio(options = {}) {
@@ -174,7 +177,7 @@ export async function findVisualStudio(options = {}) {
   if (!result.started || result.code !== 0) return null;
   const installationPath = parseVsWhereInstallationPath(result.stdout);
   if (installationPath === null) return null;
-  const launchVsDevShell = path.join(installationPath, "Common7", "Tools", "Launch-VsDevShell.ps1");
+  const launchVsDevShell = path.win32.join(installationPath, "Common7", "Tools", "Launch-VsDevShell.ps1");
   if (!await (options.isFile ?? isFile)(launchVsDevShell)) return null;
   return { vswhere, launchVsDevShell };
 }

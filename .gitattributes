@@ -1,1 +1,2 @@
+* text=auto eol=lf
 tests/e2e-fixtures/remote-workspace/writable.txt text eol=lf
