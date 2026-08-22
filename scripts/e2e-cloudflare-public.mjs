@@ -168,19 +168,26 @@ export async function runPublicCloudflareE2E({ sessionId, environment = process.
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), "toolspan-cloudflare-public-"));
   let cloudflared;
   let hostResult;
+  let hostPhase = "NOT_STARTED";
   try {
     cloudflared = startCloudflared(tunnelToken, temporaryRoot, secrets);
     await Promise.race([
       cloudflared.registeredPromise,
       new Promise((_, reject) => setTimeout(() => reject(new Error("CLOUDFLARED_REGISTER_TIMEOUT")), 60_000)),
     ]);
-    hostResult = await runPackedProtocolE2e({
-      command: "npm run e2e:cloudflare-public",
-      evidenceFileName: `cloudflare-public-host-${id}.json`,
-      publicOrigin,
-      fixedPort: localPort,
-      writeExternalHostEvidence: false,
-    });
+    try {
+      hostResult = await runPackedProtocolE2e({
+        command: "npm run e2e:cloudflare-public",
+        evidenceFileName: `cloudflare-public-host-${id}.json`,
+        publicOrigin,
+        fixedPort: localPort,
+        writeExternalHostEvidence: false,
+        skipInspectorAuthBoundary: true,
+        onPhase(phase) { hostPhase = phase; },
+      });
+    } catch {
+      throw new Error(`PUBLIC_HOST_${hostPhase}_FAILED`);
+    }
     assert(hostResult.status === "SMOKE_PASS" && hostResult.toolCount === 27, "PUBLIC_HOST_SEQUENCE_INCOMPLETE");
     assert(hostResult.publicOrigin === publicOrigin && hostResult.publicHealthPassed === true
       && hostResult.oauthDiscoveryPassed === true, "PUBLIC_HOST_ASSERTIONS_INCOMPLETE");

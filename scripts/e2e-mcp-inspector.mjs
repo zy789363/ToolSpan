@@ -270,11 +270,7 @@ async function runNpm(args, cwd, options = {}) {
   });
 }
 
-async function runOfficialInspectorAuthSmoke(origin, temporaryRoot) {
-  const inspectorStorage = path.join(temporaryRoot, "inspector-storage");
-  const oauthStatePath = path.join(inspectorStorage, "oauth.json");
-  const clientConfigPath = path.join(inspectorStorage, "client.json");
-  await mkdir(inspectorStorage);
+async function resolveOfficialInspectorVersion() {
   const versionResult = await runNpm([
     "view",
     "@modelcontextprotocol/inspector@latest",
@@ -286,6 +282,15 @@ async function runOfficialInspectorAuthSmoke(origin, temporaryRoot) {
     typeof resolvedVersion === "string" && /^2\.[0-9]+\.[0-9]+$/u.test(resolvedVersion),
     "Official Inspector latest did not resolve to a v2 release",
   );
+  return resolvedVersion;
+}
+
+async function runOfficialInspectorAuthSmoke(origin, temporaryRoot) {
+  const inspectorStorage = path.join(temporaryRoot, "inspector-storage");
+  const oauthStatePath = path.join(inspectorStorage, "oauth.json");
+  const clientConfigPath = path.join(inspectorStorage, "client.json");
+  await mkdir(inspectorStorage);
+  const resolvedVersion = await resolveOfficialInspectorVersion();
 
   const cliArguments = [
     "exec",
@@ -990,6 +995,8 @@ export async function runPackedProtocolE2e({
   publicOrigin: requestedPublicOrigin,
   fixedPort,
   writeExternalHostEvidence: persistExternalHostEvidence = true,
+  onPhase = () => {},
+  skipInspectorAuthBoundary = false,
 } = {}) {
   assert(
     ["npm run e2e:mcp-inspector", "npm run e2e:host:local", "npm run e2e:cloudflare-public"].includes(command),
@@ -1003,6 +1010,8 @@ export async function runPackedProtocolE2e({
   } else {
     assert(fixedPort === undefined, "FIXED_PORT_REQUIRES_PUBLIC_E2E");
   }
+  assert(skipInspectorAuthBoundary === false || (publicOrigin !== undefined && persistExternalHostEvidence === false),
+    "AUTH_BOUNDARY_SKIP_NOT_PUBLIC_ONLY");
   const fixtureRoot = await realpath(path.join(repositoryRoot, ...FIXTURE_RELATIVE_PATH.split("/")));
   const canonicalRepository = await realpath(repositoryRoot);
   assert(
@@ -1032,6 +1041,7 @@ export async function runPackedProtocolE2e({
   let inspectorProof;
   let temporaryRootRemoved = false;
   try {
+    onPhase("PACK_INSTALL");
     const { installedRoot, installedPackage } = await installPackedRuntime(temporaryRoot);
     const sdkPackage = await readJson(path.join(repositoryRoot, "node_modules", "@modelcontextprotocol", "sdk", "package.json"));
     assert(sdkPackage.version === SDK_VERSION, "Installed MCP SDK version differs from the pinned harness version");
@@ -1063,10 +1073,22 @@ export async function runPackedProtocolE2e({
       ownerPasswordHashFile: passwordHashFile,
     }, null, 2)}\n`, "utf8");
 
+    onPhase("LOCAL_HEALTH");
     server = spawnServer(path.join(installedRoot, "dist", "main.js"), installedRoot, configPath);
     await waitForHealth(server, localOrigin);
-    if (origin !== localOrigin) await waitForHealth(server, origin, 600);
-    const inspectorSmoke = await runOfficialInspectorAuthSmoke(origin, temporaryRoot);
+    if (origin !== localOrigin) {
+      onPhase("PUBLIC_HEALTH");
+      await waitForHealth(server, origin, 600);
+    }
+    let inspectorSmoke;
+    if (skipInspectorAuthBoundary) {
+      onPhase("INSPECTOR_VERSION");
+      inspectorSmoke = { resolvedVersion: await resolveOfficialInspectorVersion(), exitCode: null, skipped: true };
+    } else {
+      onPhase("INSPECTOR_AUTH_BOUNDARY");
+      inspectorSmoke = await runOfficialInspectorAuthSmoke(origin, temporaryRoot);
+    }
+    onPhase("OAUTH_DISCOVERY");
     const protectedMetadata = await fetchJson(`${origin}/.well-known/oauth-protected-resource`, {}, 200);
     const authorizationMetadata = await fetchJson(`${origin}/.well-known/oauth-authorization-server`, {}, 200);
     assert(protectedMetadata.body.resource === `${origin}/mcp`, "OAuth protected-resource metadata has the wrong resource");
@@ -1075,6 +1097,7 @@ export async function runPackedProtocolE2e({
       "OAuth authorization-server metadata has the wrong endpoint",
     );
 
+    onPhase("INSPECTOR_AUTHORIZED_SEQUENCE");
     const inspectorAuthorized = await runOfficialInspectorAuthorizedSequence({
       origin,
       temporaryRoot,
@@ -1101,6 +1124,7 @@ export async function runPackedProtocolE2e({
     else await writeFile(jobOutputPath, originalJobOutput);
     assert(sha256(await readFile(writablePath, "utf8")) === originalWritableHash, "Inspector fixture reset failed");
 
+    onPhase("SDK_SEQUENCE");
     const fullAuthorization = await issueOAuthToken(
       origin,
       ["workspace:read", "workspace:write", "jobs:run", "artifacts:publish"],
@@ -1268,7 +1292,9 @@ export async function runPackedProtocolE2e({
         ...(publicOrigin === undefined ? [] : [
           { id: "public-health", status: "PASS", detail: "fixed aiqushi.top HTTPS origin reached the packed loopback runtime" },
         ]),
-        { id: "official-inspector-auth-boundary", status: "PASS", detail: "latest v2 CLI returned auth_required with exit code 3 and wrote no auth store" },
+        ...(skipInspectorAuthBoundary ? [] : [
+          { id: "official-inspector-auth-boundary", status: "PASS", detail: "latest v2 CLI returned auth_required with exit code 3 and wrote no auth store" },
+        ]),
         { id: "official-inspector-oauth", status: "PASS", detail: "authorization-code PKCE completed through a loopback callback" },
         { id: "official-inspector-initialize", status: "PASS" },
         { id: "official-inspector-tools-list", status: "PASS", detail: "exact contracted set of 27 tools" },
