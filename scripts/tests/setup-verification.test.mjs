@@ -294,6 +294,7 @@ test("Setup CI has Ubuntu and Windows Node 24 source jobs and supplies no extern
   );
   const commands = setup.steps.filter((step) => typeof step.run === "string").map((step) => step.run);
   assert.ok(commands.includes("npm ci"));
+  assert.ok(commands.some((command) => command.includes("ripgrep")));
   assert.ok(commands.some((command) => command.includes("examples/goal-state.example.json")
     && command.includes(".toolspan-dev/goal-state.json")));
   assert.ok(commands.includes("npm run verify:setup"));

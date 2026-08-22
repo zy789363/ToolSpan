@@ -52,6 +52,17 @@
           }
         },
         {
+          "name": "Install ripgrep on Ubuntu",
+          "if": "runner.os == 'Linux'",
+          "run": "sudo apt-get update\nsudo apt-get install --no-install-recommends ripgrep"
+        },
+        {
+          "name": "Install ripgrep on Windows",
+          "if": "runner.os == 'Windows'",
+          "shell": "pwsh",
+          "run": "choco install ripgrep --no-progress --yes"
+        },
+        {
           "name": "Clean install",
           "run": "npm ci"
         },
@@ -106,7 +117,13 @@
         {
           "name": "Install Ubuntu Tauri prerequisites",
           "if": "runner.os == 'Linux'",
-          "run": "sudo apt-get update\nsudo apt-get install --no-install-recommends libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf"
+          "run": "sudo apt-get update\nsudo apt-get install --no-install-recommends libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf ripgrep"
+        },
+        {
+          "name": "Install ripgrep on Windows",
+          "if": "runner.os == 'Windows'",
+          "shell": "pwsh",
+          "run": "choco install ripgrep --no-progress --yes"
         },
         {
           "name": "Clean install Core",
@@ -169,7 +186,13 @@
         {
           "name": "Install Ubuntu Tauri prerequisites",
           "if": "runner.os == 'Linux'",
-          "run": "sudo apt-get update\nsudo apt-get install --no-install-recommends libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf"
+          "run": "sudo apt-get update\nsudo apt-get install --no-install-recommends libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf ripgrep"
+        },
+        {
+          "name": "Install ripgrep on Windows",
+          "if": "runner.os == 'Windows'",
+          "shell": "pwsh",
+          "run": "choco install ripgrep --no-progress --yes"
         },
         {
           "name": "Enable Rust verification components",
