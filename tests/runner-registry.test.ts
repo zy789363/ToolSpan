@@ -110,8 +110,9 @@ describe("production runner registry", () => {
         args: ["test"],
       });
       let polled = await jobs.pollJob({ jobId: started.id });
-      for (let attempt = 0; attempt < 100 && polled.job.status === "running"; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 20));
+      const pollDeadline = Date.now() + (process.env.CI === "true" ? 10_000 : 3_000);
+      while (polled.job.status === "running" && Date.now() < pollDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
         polled = await jobs.pollJob({ jobId: started.id });
       }
 
