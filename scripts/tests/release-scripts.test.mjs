@@ -262,6 +262,8 @@ test("repository ignores root dotenv files and every dotenv variant", async () =
     .filter((line) => line.length > 0 && !line.startsWith("#"));
   assert.ok(rules.includes(".env"), "root .env must be ignored");
   assert.ok(rules.includes(".env.*"), "root .env.* variants must be ignored");
+  assert.ok(rules.includes("/state/"), "runtime state must be ignored only at repository root");
+  assert.ok(!rules.includes("state/"), "nested source state directories must remain trackable");
 });
 
 test("package policy rejects nested .env segments without rejecting .environment", () => {

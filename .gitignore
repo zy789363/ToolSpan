@@ -8,7 +8,7 @@ coverage/
 .toolspan-dev/
 config.local.json
 webgpt.config.json
-state/
+/state/
 secrets/
 vendor-inputs/
 deploy/cloudflared/config.yml
