@@ -12,11 +12,20 @@ import { SERVICE_INFO } from "../src/service-info.js";
 
 const temporaryDirectories: string[] = [];
 const children: ChildProcessWithoutNullStreams[] = [];
+const childClosures = new Map<ChildProcessWithoutNullStreams, Promise<{
+  code: number | null;
+  signal: NodeJS.Signals | null;
+}>>();
 
 afterEach(async () => {
-  for (const child of children.splice(0)) {
+  const activeChildren = children.splice(0);
+  for (const child of activeChildren) {
     if (child.exitCode === null) child.kill("SIGTERM");
   }
+  await Promise.all(activeChildren.map(async (child) => {
+    await childClosures.get(child);
+    childClosures.delete(child);
+  }));
   await Promise.all(temporaryDirectories.splice(0).map((directory) =>
     rm(directory, { recursive: true, force: true }),
   ));
@@ -71,6 +80,10 @@ describe("server process", () => {
       windowsHide: true,
     });
     children.push(child);
+    const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+      (resolve) => child.once("close", (code, signal) => resolve({ code, signal })),
+    );
+    childClosures.set(child, closed);
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8");
@@ -101,9 +114,7 @@ describe("server process", () => {
       version: SERVICE_INFO.version,
     });
     child.kill("SIGTERM");
-    const termination = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-      (resolve) => child.once("exit", (code, signal) => resolve({ code, signal })),
-    );
+    const termination = await closed;
     expect(
       termination.code === 0 || termination.signal === "SIGTERM",
     ).toBe(true);
