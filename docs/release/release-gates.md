@@ -153,7 +153,7 @@ Windows 真实 smoke 已完成当前安装器 UI、标准 per-user 安装、已�
 
 Computer Use backend 仍只暴露目标窗口；该能力限制由 `.toolspan-dev/evidence/computer-use-tray-targeting-20260822T061954Z.json` 如实保留。Owner 随后于 2026-08-22 手工完成最终 Windows Tray smoke，并明确确认通过。确认记录 `.toolspan-dev/evidence/windows-tray-manual-20260822T130308Z.json` 与既有安装/生命周期/process evidence 合并，绑定 MSI `2c3554cf01f1ff19f0799a50b13a1db0327e471dee080ffa63d1dca0109ec310` 和 NSIS `325d6e895efaa91b950fd55d44950e103aea95c75f0ab38922f45e442b87f21c`；最新 Release verifier 已确认 `E-WIN-01=PASS`、`proofValidated=true`。
 
-External gates（以 `release-verification-20260822T143313179Z.json` 为准）：
+External gates（以 `release-verification-20260822T153445652Z.json` 为准）：
 
 ```text
 E-OWNER-01      PASS                    proofValidated=true
@@ -177,6 +177,8 @@ Required blockers: none。Active conditional blockers: `E-CF-TOKEN-01`、`E-CF-W
 Owner 于 2026-08-22 批准采用 Apache License 2.0，并进一步明确批准 publication、IP rights 与 trademark 四项闭集声明；`LICENSE` 为 Apache 官方完整文本，规范化 SHA-256 为 `58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd`，npm package/lock/shrinkwrap 元数据均为 SPDX ID `Apache-2.0`。闭集 proof 为 `.toolspan-dev/evidence/external/E-OWNER-01.json`；Release verifier 已确认 `E-OWNER-01=PASS`、`proofValidated=true`。
 
 GitHub 插件与 `gh` CLI 均已连接账号 `zy789363`。2026-08-22 首个私有 `main` commit `e22d3414befa45162287eaed4bbd002e4d101e7f` 已推送；GitHub Free 明确拒绝私有仓库的 ruleset/branch protection，且 private vulnerability reporting 仅支持 public repository。由于 `E-OWNER-01` 已明确批准公开发布权且随后批准 `E-GH-01`，仓库 `zy789363/ToolSpan` 已转为 `PUBLIC`。远端回查确认默认分支为 `main`、根 `SECURITY.md` 存在、branch protection 启用 linear history/conversation resolution 并禁止 force push/deletion、`Protect main` ruleset 为 `active` 且包含 deletion/non-fast-forward/linear-history 三项规则、private vulnerability reporting 返回 `enabled=true`。闭集 proof 为 `.toolspan-dev/evidence/external/E-GH-01.json`；Release verifier 已确认 `E-GH-01=PASS`、`proofValidated=true`。未创建 tag 或 Release。
+
+首轮真实 GitHub clean-checkout CI 暴露并修复了四类仅在新仓库可见的问题：嵌套 `src/state` 被宽泛 ignore、CI 未从 example 初始化 gitignored goal state、runner 未安装 ripgrep、Windows/POSIX 路径与 checkout 行尾不一致；高负载 Windows integration tests 仅在 `CI=true` 时使用 15 秒有界 timeout，本地仍为 5 秒。代码 HEAD `894fc7bc3366bb2b77ad00b62eec84071cf98279` 的 GitHub Actions run `32581011705` 最终 7/7 jobs success：Core Ubuntu Node 22.17/24、Core Windows Node 24、Desktop source Ubuntu/Windows Node 24、Setup source Ubuntu/Windows Node 24；Windows Desktop 的 native build attempt 也成功。随后对同一代码 HEAD 运行完整 `verify:release`，dry-run evidence 为 `.toolspan-dev/evidence/release/run-20260822T153439306Z-b7d8a0b5`，verification evidence 为 `.toolspan-dev/evidence/release/release-verification-20260822T153445652Z.json`，`requiredPending=[]`、`externalGatesPromotedWithoutEvidence=0`、`tagCreated=false`、`published=false`。
 
 `E-HOST-01=PASS`：2026-08-22 的 `npm run e2e:mcp-inspector` 先验证无凭证 `auth_required / exit 3`，再由 official Inspector 2.3.0 使用自身 PKCE、loopback callback 与两个随机临时 auth store 完成 full-scope/read-only 两条链。真实调用覆盖 initialize、exact 27、read、`apply_patch` dry-run/apply/readback、allowlisted job/poll/output 与 read-only 写拒绝；SDK 辅助链进一步确认 `_meta` 的 `insufficient_scope`。Password 未进入参数、环境、浏览器控制指令、日志或 evidence；两个 auth store 无论成功/失败均由 `finally` 删除，当前 `%TEMP%` 遗留数为 0。详细证据为 `.toolspan-dev/evidence/release-e-host-01.json`，闭集 proof 为 `.toolspan-dev/evidence/external/E-HOST-01.json`。
 
@@ -301,11 +303,21 @@ Files changed by this report update:
 - `npm-shrinkwrap.json`
 - `README.md`
 - `README.zh-CN.md`
+- `.gitattributes`
+- `.github/workflows/core.yml`
 - `scripts/check-oss.mjs`
+- `scripts/check-ci.mjs`
+- `scripts/desktop-verification-utils.mjs`
 - `scripts/e2e-mcp-inspector.mjs`
 - `scripts/tests/host-e2e-safety.test.mjs`
 - `scripts/e2e-codex-remote.mjs`
 - `scripts/tests/codex-remote-e2e.test.mjs`
+- `scripts/tests/release-scripts.test.mjs`
+- `scripts/tests/setup-verification.test.mjs`
+- `src/state/state-store.ts`
+- `tests/artifacts.test.ts`
+- `tests/runner-registry.test.ts`
+- `vitest.config.ts`
 - `docs/release/host-e2e.md`
 - `.toolspan-dev/evidence/windows-tray-manual-20260822T130308Z.json`
 - `.toolspan-dev/evidence/external/E-WIN-01.json`
