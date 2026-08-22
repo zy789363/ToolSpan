@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0",
+  "toolSpanVersion": "0.5.0",
+  "instanceName": "owner-confirmed-instance",
+  "localUrl": "http://127.0.0.1:8787",
+  "desiredHostname": "mcp.aiqushi.top",
+  "publicMcpUrl": "https://mcp.aiqushi.top/mcp",
+  "oauthDiscoveryUrl": "https://mcp.aiqushi.top/.well-known/oauth-authorization-server",
+  "expectedToolCount": 27,
+  "tunnelName": "toolspan-aiqushi-top",
+  "domainChoice": "existing",
+  "officialDocs": [
+    "https://developers.cloudflare.com/tunnel/",
+    "https://developers.openai.com/plugins/deploy/connect-chatgpt"
+  ],
+  "generatedAt": "2026-08-21T00:00:00.000Z"
+}

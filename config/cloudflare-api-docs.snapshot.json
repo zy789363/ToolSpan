@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-08-21",
+  "staleAfterDays": 30,
+  "verificationStatus": "OFFICIAL_DOCS_VERIFIED",
+  "apiOrigin": "https://api.cloudflare.com",
+  "apiBase": "https://api.cloudflare.com/client/v4",
+  "officialDocs": {
+    "tokenPermissions": "https://developers.cloudflare.com/fundamentals/api/reference/permissions/",
+    "zoneStatus": "https://developers.cloudflare.com/dns/zone-setups/reference/domain-status/",
+    "tunnelCreate": "https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/methods/create/",
+    "dnsRecords": "https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/list/"
+  },
+  "permissionsAtVerification": [
+    { "scope": "account", "name": "Cloudflare Tunnel Write" },
+    { "scope": "zone", "name": "DNS Write" },
+    { "scope": "zone", "name": "Zone Read" }
+  ],
+  "permissionLabelsAreReleaseAssertion": false,
+  "zoneApplyGate": {
+    "requiredStatus": "active",
+    "missingResult": "STOP_APPLY",
+    "pendingResult": "STOP_APPLY"
+  },
+  "authModes": {
+    "scopedApiToken": {
+      "recommended": true,
+      "headerNames": ["Authorization"],
+      "persistSecretValue": false
+    },
+    "globalApiKey": {
+      "recommended": false,
+      "legacy": true,
+      "headerNames": ["X-Auth-Email", "X-Auth-Key"],
+      "persistSecretValue": false
+    }
+  },
+  "runtimeCredentialHolder": "cloudflared-official-mechanism",
+  "fallbackText": "查看当前 Cloudflare 官方文档并重新核验权限标签；离线契约测试不据过期快照宣称真实 API 通过。"
+}

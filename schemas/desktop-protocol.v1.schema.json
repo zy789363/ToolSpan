@@ -1,0 +1,851 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://toolspan.local/schemas/desktop-protocol.v1.schema.json",
+  "title": "ToolSpan Desktop Protocol v1",
+  "description": "JSONL messages exchanged between the ToolSpan desktop application and its local Node host.",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/response" },
+    { "$ref": "#/$defs/event" }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "emptyParams": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "request": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "method": { "const": "system.hello" },
+            "params": {
+              "type": "object",
+              "properties": {
+                "protocolVersion": { "const": 1 },
+                "productVersion": { "type": "string", "minLength": 1, "maxLength": 64 }
+              },
+              "required": ["protocolVersion"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["id", "method", "params"],
+          "additionalProperties": false
+        },
+        { "$ref": "#/$defs/emptyRequest_runtime.getSnapshot" },
+        { "$ref": "#/$defs/emptyRequest_runtime.start" },
+        { "$ref": "#/$defs/emptyRequest_runtime.stop" },
+        { "$ref": "#/$defs/emptyRequest_runtime.restart" },
+        { "$ref": "#/$defs/emptyRequest_runtime.validateConfig" },
+        { "$ref": "#/$defs/emptyRequest_runtime.getConfigSummary" },
+        {
+          "type": "object",
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "method": { "const": "runtime.listJobs" },
+            "params": {
+              "type": "object",
+              "properties": {
+                "workspaceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "status": {
+                  "enum": ["queued", "running", "completed", "failed", "cancelled", "timed_out", "interrupted"]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": ["id", "method", "params"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "method": { "const": "runtime.cancelJob" },
+            "params": {
+              "type": "object",
+              "properties": {
+                "jobId": { "type": "string", "minLength": 1, "maxLength": 128 }
+              },
+              "required": ["jobId"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["id", "method", "params"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "method": { "const": "runtime.listArtifacts" },
+            "params": {
+              "type": "object",
+              "properties": {
+                "workspaceId": { "type": "string", "minLength": 1, "maxLength": 128 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": ["id", "method", "params"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "method": { "const": "runtime.getLogChunk" },
+            "params": {
+              "type": "object",
+              "properties": {
+                "cursor": { "type": "integer", "minimum": 0 },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 65536 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": ["id", "method", "params"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "method": { "const": "runtime.subscribeEvents" },
+            "params": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" }
+              },
+              "required": ["enabled"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["id", "method", "params"],
+          "additionalProperties": false
+        },
+        { "$ref": "#/$defs/emptyRequest_connection.testLocal" },
+        { "$ref": "#/$defs/emptyRequest_connection.testPublic" },
+        { "$ref": "#/$defs/setupGetSnapshotRequest" },
+        { "$ref": "#/$defs/setupPreflightRequest" },
+        { "$ref": "#/$defs/setupPlanRequest" },
+        { "$ref": "#/$defs/setupApplyRequest" },
+        { "$ref": "#/$defs/setupRollbackRequest" },
+        { "$ref": "#/$defs/setupReconcileRequest" },
+        { "$ref": "#/$defs/setupDiscardCredentialRequest" }
+      ]
+    },
+    "emptyRequest_runtime.getSnapshot": {
+      "$ref": "#/$defs/emptyRequest",
+      "unevaluatedProperties": false,
+      "properties": { "method": { "const": "runtime.getSnapshot" } }
+    },
+    "emptyRequest_runtime.start": {
+      "$ref": "#/$defs/emptyRequest",
+      "unevaluatedProperties": false,
+      "properties": { "method": { "const": "runtime.start" } }
+    },
+    "emptyRequest_runtime.stop": {
+      "$ref": "#/$defs/emptyRequest",
+      "unevaluatedProperties": false,
+      "properties": { "method": { "const": "runtime.stop" } }
+    },
+    "emptyRequest_runtime.restart": {
+      "$ref": "#/$defs/emptyRequest",
+      "unevaluatedProperties": false,
+      "properties": { "method": { "const": "runtime.restart" } }
+    },
+    "emptyRequest_runtime.validateConfig": {
+      "$ref": "#/$defs/emptyRequest",
+      "unevaluatedProperties": false,
+      "properties": { "method": { "const": "runtime.validateConfig" } }
+    },
+    "emptyRequest_runtime.getConfigSummary": {
+      "$ref": "#/$defs/emptyRequest",
+      "unevaluatedProperties": false,
+      "properties": { "method": { "const": "runtime.getConfigSummary" } }
+    },
+    "emptyRequest_connection.testLocal": {
+      "$ref": "#/$defs/emptyRequest",
+      "unevaluatedProperties": false,
+      "properties": { "method": { "const": "connection.testLocal" } }
+    },
+    "emptyRequest_connection.testPublic": {
+      "$ref": "#/$defs/emptyRequest",
+      "unevaluatedProperties": false,
+      "properties": { "method": { "const": "connection.testPublic" } }
+    },
+    "setupId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,128}$"
+    },
+    "setupZoneName": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 253,
+      "pattern": "^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+    },
+    "setupCredential": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "api_token" },
+            "token": { "type": "string", "minLength": 1, "maxLength": 65536 }
+          },
+          "required": ["kind", "token"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "global_api_key" },
+            "email": { "type": "string", "format": "email", "minLength": 3, "maxLength": 254 },
+            "key": { "type": "string", "minLength": 1, "maxLength": 65536 },
+            "acknowledgement": { "const": "I UNDERSTAND GLOBAL API KEY ACCESS" }
+          },
+          "required": ["kind", "email", "key", "acknowledgement"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "setupManifest": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "const": "1.0" },
+        "toolSpanVersion": { "type": "string", "pattern": "^0\\.5\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
+        "instanceName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "localUrl": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^http://(?:127\\.0\\.0\\.1|localhost)(?::[0-9]{1,5})?/?$"
+        },
+        "desiredHostname": {
+          "type": "string",
+          "pattern": "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+        },
+        "publicMcpUrl": { "type": "string", "format": "uri", "pattern": "^https://[^/?#]+/mcp$" },
+        "oauthDiscoveryUrl": { "type": "string", "format": "uri", "pattern": "^https://[^/?#]+/\\.well-known/oauth-authorization-server$" },
+        "expectedToolCount": { "const": 27 },
+        "tunnelName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "domainChoice": { "enum": ["existing", "other_registrar", "namesilo_referral", "namesilo_no_referral"] },
+        "officialDocs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://(?:developers\\.cloudflare\\.com|developers\\.openai\\.com)/"
+          }
+        },
+        "generatedAt": { "type": "string", "format": "date-time", "maxLength": 64 }
+      },
+      "required": ["schemaVersion", "toolSpanVersion", "instanceName", "localUrl", "desiredHostname", "publicMcpUrl", "oauthDiscoveryUrl", "expectedToolCount", "tunnelName", "domainChoice", "officialDocs", "generatedAt"],
+      "additionalProperties": false
+    },
+    "setupGetSnapshotRequest": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "setup.getSnapshot" },
+        "params": {
+          "type": "object",
+          "properties": { "sessionId": { "$ref": "#/$defs/setupId" } },
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    "setupPreflightRequest": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "setup.preflight" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": { "$ref": "#/$defs/setupId" },
+            "idempotencyKey": { "$ref": "#/$defs/setupId" },
+            "zoneName": { "$ref": "#/$defs/setupZoneName" },
+            "manifest": { "$ref": "#/$defs/setupManifest" },
+            "credential": { "$ref": "#/$defs/setupCredential" }
+          },
+          "required": ["sessionId", "idempotencyKey", "zoneName", "manifest"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    "setupPlanRequest": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "setup.plan" },
+        "params": {
+          "type": "object",
+          "properties": { "sessionId": { "$ref": "#/$defs/setupId" } },
+          "required": ["sessionId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    "setupApplyRequest": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "setup.apply" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": { "$ref": "#/$defs/setupId" },
+            "confirmation": { "const": "APPLY" },
+            "credential": { "$ref": "#/$defs/setupCredential" }
+          },
+          "required": ["sessionId", "confirmation"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    "setupRollbackRequest": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "setup.rollback" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": { "$ref": "#/$defs/setupId" },
+            "confirmation": { "const": "ROLLBACK" },
+            "credential": { "$ref": "#/$defs/setupCredential" }
+          },
+          "required": ["sessionId", "confirmation"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    "setupReconcileRequest": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "setup.reconcile" },
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": { "$ref": "#/$defs/setupId" },
+            "credential": { "$ref": "#/$defs/setupCredential" }
+          },
+          "required": ["sessionId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    "setupDiscardCredentialRequest": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "setup.discardCredential" },
+        "params": {
+          "type": "object",
+          "properties": { "sessionId": { "$ref": "#/$defs/setupId" } },
+          "required": ["sessionId"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "method", "params"],
+      "additionalProperties": false
+    },
+    "emptyRequest": {
+      "type": "object",
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "type": "string" },
+        "params": { "$ref": "#/$defs/emptyParams" }
+      },
+      "required": ["id", "method", "params"]
+    },
+    "jobRecord": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "runner": { "type": "string" },
+        "args": { "type": "array", "items": { "type": "string" } },
+        "status": { "enum": ["queued", "running", "completed", "failed", "cancelled", "timed_out", "interrupted"] },
+        "pid": { "type": ["integer", "null"] },
+        "exitCode": { "type": ["integer", "null"] },
+        "error": { "type": ["string", "null"] },
+        "logPath": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "startedAt": { "type": ["string", "null"], "format": "date-time" },
+        "finishedAt": { "type": ["string", "null"], "format": "date-time" }
+      },
+      "required": ["id", "workspaceId", "runner", "args", "status", "pid", "exitCode", "error", "logPath", "createdAt", "startedAt", "finishedAt"],
+      "additionalProperties": false
+    },
+    "artifactRecord": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "profile": { "enum": ["workspace_snapshot", "git_diff", "job_output"] },
+        "jobId": { "type": ["string", "null"] },
+        "filePath": { "type": "string" },
+        "mediaType": { "type": "string" },
+        "size": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "publishedSlug": { "type": ["string", "null"] }
+      },
+      "required": ["id", "workspaceId", "profile", "jobId", "filePath", "mediaType", "size", "sha256", "createdAt", "publishedSlug"],
+      "additionalProperties": false
+    },
+    "workspaceRoot": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "path": { "type": "string" },
+        "access": { "enum": ["read", "read-write"] }
+      },
+      "required": ["id", "name", "path", "access"],
+      "additionalProperties": false
+    },
+    "helloResult": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "productVersion": { "type": "string" },
+        "capabilities": {
+          "type": "array",
+          "prefixItems": [
+            { "const": "runtime" },
+            { "const": "connection" },
+            { "const": "jobs" },
+            { "const": "artifacts" },
+            { "const": "logs" },
+            { "const": "setup" }
+          ],
+          "items": false
+        }
+      },
+      "required": ["protocolVersion", "productVersion", "capabilities"],
+      "additionalProperties": false
+    },
+    "runtimeSnapshotResult": {
+      "type": "object",
+      "properties": {
+        "state": { "enum": ["stopped", "starting", "running", "stopping", "attention"] },
+        "productVersion": { "type": "string" },
+        "instanceName": { "type": ["string", "null"] },
+        "localEndpoint": { "type": ["string", "null"] },
+        "publicBaseUrl": { "type": ["string", "null"] },
+        "mcpTools": {
+          "type": "object",
+          "properties": {
+            "available": { "type": "integer", "minimum": 0, "maximum": 27 },
+            "total": { "const": 27 }
+          },
+          "required": ["available", "total"],
+          "additionalProperties": false
+        },
+        "uptimeSeconds": { "type": ["integer", "null"], "minimum": 0 },
+        "localReady": { "type": "boolean" },
+        "publicReady": { "type": ["boolean", "null"] },
+        "recentJobs": { "type": "array", "items": { "$ref": "#/$defs/jobRecord" } },
+        "recentArtifacts": { "type": "array", "items": { "$ref": "#/$defs/artifactRecord" } },
+        "firstRunRequired": { "type": "boolean" },
+        "statePath": { "type": "string" },
+        "logPath": { "type": "string" },
+        "workspaces": { "type": "array", "items": { "$ref": "#/$defs/workspaceRoot" } },
+        "managedByDesktop": { "type": "boolean" },
+        "nodeVersion": { "type": ["string", "null"] },
+        "nodePathConfigured": { "type": "boolean" },
+        "ownerPasswordConfigured": { "type": "boolean" },
+        "oauthDiscoveryUrl": { "type": ["string", "null"] },
+        "lastUpdatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["state", "productVersion", "instanceName", "localEndpoint", "publicBaseUrl", "mcpTools", "uptimeSeconds", "localReady", "publicReady", "recentJobs", "recentArtifacts"],
+      "additionalProperties": false
+    },
+    "rendererSnapshotResult": {
+      "type": "object",
+      "properties": {
+        "firstRunRequired": { "type": "boolean" },
+        "instanceName": { "type": "string" },
+        "core": {
+          "type": "object",
+          "properties": {
+            "state": { "enum": ["running", "starting", "stopping", "stopped", "attention", "external", "unavailable"] },
+            "version": { "type": "string" },
+            "managedByDesktop": { "type": "boolean" },
+            "uptimeSeconds": { "type": ["integer", "null"], "minimum": 0 },
+            "nodeVersion": { "type": ["string", "null"] },
+            "nodePathConfigured": { "type": "boolean" }
+          },
+          "required": ["state", "version", "managedByDesktop", "uptimeSeconds", "nodeVersion", "nodePathConfigured"],
+          "additionalProperties": false
+        },
+        "connection": {
+          "type": "object",
+          "properties": {
+            "localUrl": { "type": ["string", "null"] },
+            "publicBaseUrl": { "type": ["string", "null"] },
+            "oauthDiscoveryUrl": { "type": ["string", "null"] },
+            "localReady": { "type": "boolean" },
+            "publicReady": { "type": ["boolean", "null"] }
+          },
+          "required": ["localUrl", "publicBaseUrl", "oauthDiscoveryUrl", "localReady", "publicReady"],
+          "additionalProperties": false
+        },
+        "toolContract": {
+          "type": "object",
+          "properties": {
+            "available": { "type": "integer", "minimum": 0, "maximum": 27 },
+            "total": { "const": 27 }
+          },
+          "required": ["available", "total"],
+          "additionalProperties": false
+        },
+        "workspaces": { "type": "array", "items": { "$ref": "#/$defs/workspaceRoot" } },
+        "recentJobs": { "type": "array", "items": { "$ref": "#/$defs/jobRecord" } },
+        "recentArtifacts": { "type": "array", "items": { "$ref": "#/$defs/artifactRecord" } },
+        "statePath": { "type": "string" },
+        "logPath": { "type": "string" },
+        "ownerPasswordConfigured": { "type": "boolean" },
+        "lastUpdatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["firstRunRequired", "instanceName", "core", "connection", "toolContract", "workspaces", "recentJobs", "recentArtifacts", "statePath", "logPath", "ownerPasswordConfigured", "lastUpdatedAt"],
+      "additionalProperties": false
+    },
+    "jobsResult": {
+      "type": "object",
+      "properties": { "jobs": { "type": "array", "items": { "$ref": "#/$defs/jobRecord" } } },
+      "required": ["jobs"],
+      "additionalProperties": false
+    },
+    "artifactsResult": {
+      "type": "object",
+      "properties": { "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifactRecord" } } },
+      "required": ["artifacts"],
+      "additionalProperties": false
+    },
+    "logChunkResult": {
+      "type": "object",
+      "properties": {
+        "chunk": { "type": "string" },
+        "nextCursor": { "type": "integer", "minimum": 0 },
+        "truncated": { "type": "boolean" }
+      },
+      "required": ["chunk", "nextCursor", "truncated"],
+      "additionalProperties": false
+    },
+    "connectionTestResult": {
+      "type": "object",
+      "properties": {
+        "target": { "enum": ["local", "public"] },
+        "ok": { "type": "boolean" },
+        "status": { "type": ["integer", "string", "null"] },
+        "latencyMs": { "type": "number", "minimum": 0 },
+        "service": { "type": ["string", "null"] },
+        "version": { "type": ["string", "null"] },
+        "error": { "type": ["string", "null"] },
+        "checkedUrl": { "type": ["string", "null"] },
+        "checkedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["target", "ok", "status", "latencyMs"],
+      "additionalProperties": false
+    },
+    "configSummaryResult": {
+      "type": "object",
+      "properties": {
+        "instanceName": { "type": ["string", "null"] },
+        "host": { "enum": ["127.0.0.1", "localhost", "::1"] },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "localBaseUrl": { "type": "string" },
+        "publicBaseUrl": { "type": "string" },
+        "allowedRoots": { "type": "array", "items": { "type": "string" } },
+        "stateDirectory": { "type": "string" },
+        "allowedOrigins": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["instanceName", "host", "port", "localBaseUrl", "publicBaseUrl", "allowedRoots", "stateDirectory", "allowedOrigins"],
+      "additionalProperties": false
+    },
+    "configValidationResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "valid": { "const": true },
+            "summary": { "$ref": "#/$defs/configSummaryResult" }
+          },
+          "required": ["valid", "summary"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "valid": { "const": false },
+            "error": { "const": "CONFIG_INVALID" }
+          },
+          "required": ["valid", "error"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "subscriptionResult": {
+      "type": "object",
+      "properties": { "subscribed": { "type": "boolean" } },
+      "required": ["subscribed"],
+      "additionalProperties": false
+    },
+    "setupPlanAction": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["account", "zone", "tunnel", "tunnel_config", "dns", "cloudflared", "toolspan_config"] },
+        "classification": { "enum": ["created", "reused", "updated", "untouched"] },
+        "resourceId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "beforeFingerprint": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "desiredFingerprint": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 1024 }
+      },
+      "required": ["kind", "classification", "name", "desiredFingerprint", "reason"],
+      "additionalProperties": false
+    },
+    "setupPlan": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "const": "1" },
+        "sessionId": { "$ref": "#/$defs/setupId" },
+        "account": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string", "minLength": 1, "maxLength": 256 },
+            "name": { "type": "string", "minLength": 1, "maxLength": 256 }
+          },
+          "required": ["id", "name"],
+          "additionalProperties": false
+        },
+        "zone": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string", "minLength": 1, "maxLength": 256 },
+            "name": { "type": "string", "minLength": 1, "maxLength": 253 },
+            "status": { "type": "string", "minLength": 1, "maxLength": 64 },
+            "nameservers": {
+              "type": "array",
+              "maxItems": 16,
+              "items": { "type": "string", "minLength": 1, "maxLength": 253 }
+            }
+          },
+          "required": ["id", "name", "status", "nameservers"],
+          "additionalProperties": false
+        },
+        "actions": { "type": "array", "items": { "$ref": "#/$defs/setupPlanAction" } },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 1024 }
+        },
+        "confirmationRequired": { "const": true },
+        "plannedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["schemaVersion", "sessionId", "account", "zone", "actions", "warnings", "confirmationRequired", "plannedAt"],
+      "additionalProperties": false
+    },
+    "setupReceiptResource": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["account", "zone", "tunnel", "tunnel_config", "dns", "cloudflared", "toolspan_config"] },
+        "classification": { "enum": ["created", "reused", "updated", "untouched"] },
+        "resourceId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "beforeFingerprint": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "desiredFingerprint": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "afterFingerprint": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "ownedBySession": { "type": "boolean" }
+      },
+      "required": ["kind", "classification", "resourceId", "name", "desiredFingerprint", "reason", "ownedBySession"],
+      "additionalProperties": false
+    },
+    "setupReceipt": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "const": "1" },
+        "sessionId": { "$ref": "#/$defs/setupId" },
+        "idempotencyKey": { "$ref": "#/$defs/setupId" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "resources": { "type": "array", "items": { "$ref": "#/$defs/setupReceiptResource" } },
+        "verification": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "check": { "enum": ["tunnel_health", "cloudflared", "dns", "public_endpoint", "tool_contract"] },
+              "passed": { "type": "boolean" },
+              "checkedAt": { "type": "string", "format": "date-time" },
+              "detail": { "type": "string", "minLength": 1, "maxLength": 1024 }
+            },
+            "required": ["check", "passed", "checkedAt"],
+            "additionalProperties": false
+          }
+        },
+        "rollback": {
+          "type": "object",
+          "properties": {
+            "status": { "enum": ["not_started", "full", "partial"] },
+            "resources": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": { "enum": ["account", "zone", "tunnel", "tunnel_config", "dns", "cloudflared", "toolspan_config"] },
+                  "resourceId": { "type": "string", "minLength": 1, "maxLength": 256 },
+                  "outcome": { "enum": ["removed", "restored", "skipped", "failed"] },
+                  "reason": { "type": "string", "minLength": 1, "maxLength": 1024 }
+                },
+                "required": ["kind", "resourceId", "outcome", "reason"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["status", "resources"],
+          "additionalProperties": false
+        },
+        "duplicateCreates": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["schemaVersion", "sessionId", "idempotencyKey", "startedAt", "resources", "verification", "rollback", "duplicateCreates"],
+      "additionalProperties": false
+    },
+    "setupBlocker": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "nameservers": {
+          "type": "array",
+          "maxItems": 16,
+          "items": { "type": "string", "minLength": 1, "maxLength": 253 }
+        }
+      },
+      "required": ["code", "message"],
+      "additionalProperties": false
+    },
+    "setupSnapshotResult": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "properties": {
+            "setupProtocolVersion": { "const": "1" },
+            "setupJournalVersion": { "const": "1" },
+            "setupManifestSchemaVersion": { "const": "1.0" },
+            "setupReceiptSchemaVersion": { "const": "1" },
+            "sessionId": { "$ref": "#/$defs/setupId" },
+            "target": {
+              "type": "object",
+              "properties": {
+                "zoneName": { "$ref": "#/$defs/setupZoneName" }
+              },
+              "required": ["zoneName"],
+              "additionalProperties": false
+            },
+            "status": { "enum": ["IDLE", "PREFLIGHT", "PLANNED", "WAITING_FOR_CONFIRMATION", "APPLYING", "VERIFYING", "COMPLETE", "NEEDS_CREDENTIAL_REENTRY", "NEEDS_RECONCILIATION", "ROLLING_BACK", "ROLLED_BACK", "ROLLBACK_PARTIAL"] },
+            "manifest": { "$ref": "#/$defs/setupManifest" },
+            "plan": { "$ref": "#/$defs/setupPlan" },
+            "receipt": { "$ref": "#/$defs/setupReceipt" },
+            "blocker": { "$ref": "#/$defs/setupBlocker" },
+            "requiresCredential": { "type": "boolean" },
+            "updatedAt": { "type": "string", "format": "date-time" }
+          },
+          "required": ["setupProtocolVersion", "setupJournalVersion", "setupManifestSchemaVersion", "setupReceiptSchemaVersion", "sessionId", "target", "status", "manifest", "requiresCredential", "updatedAt"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "setupDiscardResult": {
+      "type": "object",
+      "properties": {
+        "discarded": { "const": true },
+        "sessionId": { "$ref": "#/$defs/setupId" }
+      },
+      "required": ["discarded", "sessionId"],
+      "additionalProperties": false
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "ok": { "const": true },
+            "result": {
+              "anyOf": [
+                { "$ref": "#/$defs/helloResult" },
+                { "$ref": "#/$defs/runtimeSnapshotResult" },
+                { "$ref": "#/$defs/rendererSnapshotResult" },
+                { "$ref": "#/$defs/jobsResult" },
+                { "$ref": "#/$defs/jobRecord" },
+                { "$ref": "#/$defs/artifactsResult" },
+                { "$ref": "#/$defs/logChunkResult" },
+                { "$ref": "#/$defs/connectionTestResult" },
+                { "$ref": "#/$defs/configSummaryResult" },
+                { "$ref": "#/$defs/configValidationResult" },
+                { "$ref": "#/$defs/subscriptionResult" },
+                { "$ref": "#/$defs/setupSnapshotResult" },
+                { "$ref": "#/$defs/setupDiscardResult" }
+              ]
+            }
+          },
+          "required": ["id", "ok", "result"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+            "ok": { "const": false },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": { "type": "string", "minLength": 1, "maxLength": 64 },
+                "message": { "type": "string", "minLength": 1, "maxLength": 512 }
+              },
+              "required": ["code", "message"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["id", "ok", "error"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "event": {
+      "type": "object",
+      "properties": {
+        "event": { "enum": ["runtime.snapshot", "runtime.log", "runtime.attention"] },
+        "data": true
+      },
+      "required": ["event", "data"],
+      "additionalProperties": false
+    }
+  }
+}

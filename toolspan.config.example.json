@@ -1,0 +1,15 @@
+{
+  "host": "127.0.0.1",
+  "port": 8787,
+  "publicBaseUrl": "https://mcp.example.com",
+  "instanceName": "home-build-pc",
+  "allowedRoots": [
+    "D:\\Projects"
+  ],
+  "stateDirectory": "./state",
+  "ownerPasswordHashFile": "./secrets/owner.bcrypt",
+  "allowedOrigins": [
+    "http://127.0.0.1",
+    "http://localhost"
+  ]
+}

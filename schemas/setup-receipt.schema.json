@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://toolspan.dev/schemas/setup-receipt.v1.json",
+  "title": "ToolSpan Setup Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sessionId", "idempotencyKey", "startedAt", "resources", "verification", "rollback", "duplicateCreates"],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "sessionId": { "$ref": "#/$defs/id" },
+    "idempotencyKey": { "$ref": "#/$defs/id" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "completedAt": { "type": "string", "format": "date-time" },
+    "resources": { "type": "array", "items": { "$ref": "#/$defs/resource" } },
+    "verification": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check", "passed", "checkedAt"],
+        "properties": {
+          "check": { "enum": ["tunnel_health", "cloudflared", "dns", "public_endpoint", "tool_contract"] },
+          "passed": { "type": "boolean" },
+          "checkedAt": { "type": "string", "format": "date-time" },
+          "detail": { "type": "string", "maxLength": 1024 }
+        }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "resources"],
+      "properties": {
+        "status": { "enum": ["not_started", "full", "partial"] },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "resourceId", "outcome", "reason"],
+            "properties": {
+              "kind": { "type": "string" },
+              "resourceId": { "type": "string" },
+              "outcome": { "enum": ["removed", "restored", "skipped", "failed"] },
+              "reason": { "type": "string", "maxLength": 1024 }
+            }
+          }
+        }
+      }
+    },
+    "duplicateCreates": { "type": "integer", "const": 0 }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 8, "maxLength": 128, "pattern": "^[A-Za-z0-9_-]+$" },
+    "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "classification", "resourceId", "name", "desiredFingerprint", "reason", "ownedBySession"],
+      "properties": {
+        "kind": { "enum": ["account", "zone", "tunnel", "tunnel_config", "dns", "cloudflared", "toolspan_config"] },
+        "classification": { "enum": ["created", "reused", "updated", "untouched"] },
+        "resourceId": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "beforeFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "desiredFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "reason": { "type": "string" },
+        "ownedBySession": { "type": "boolean" },
+        "afterFingerprint": { "$ref": "#/$defs/fingerprint" }
+      }
+    }
+  }
+}

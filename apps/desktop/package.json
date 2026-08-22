@@ -1,0 +1,52 @@
+{
+  "name": "@toolspan/desktop",
+  "version": "0.5.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.17.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node ./node_modules/vitest/vitest.mjs run --exclude tests/a11y/** --exclude tests/i18n/**",
+    "check:i18n": "node ./node_modules/vitest/vitest.mjs run tests/i18n",
+    "test:a11y": "node ./node_modules/vitest/vitest.mjs run tests/a11y",
+    "test:visual": "node ./node_modules/vitest/vitest.mjs run tests/visual",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "5.9.1",
+    "@radix-ui/react-alert-dialog": "1.1.23",
+    "@radix-ui/react-select": "2.3.7",
+    "@radix-ui/react-tabs": "1.1.21",
+    "@radix-ui/react-tooltip": "1.2.16",
+    "@tanstack/react-query": "5.101.4",
+    "@tauri-apps/api": "2.11.1",
+    "i18next": "26.3.6",
+    "lucide-react": "1.33.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-hook-form": "7.85.0",
+    "react-i18next": "17.0.11",
+    "toolspan-mcp": "file:../..",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@tauri-apps/cli": "2.11.4",
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.5",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "6.1.0",
+    "axe-core": "4.13.0",
+    "jsdom": "29.0.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  }
+}

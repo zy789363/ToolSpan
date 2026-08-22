@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ToolSpan Release Host E2E Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "sanitized",
+    "command",
+    "protocolClient",
+    "packedRuntime",
+    "syntheticConfig",
+    "checks",
+    "fixtureIsolation",
+    "secretSafety",
+    "gates"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sanitized": {
+      "const": true
+    },
+    "command": {
+      "enum": [
+        "npm run e2e:mcp-inspector",
+        "npm run e2e:host:local"
+      ]
+    },
+    "protocolClient": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "package",
+        "version",
+        "transport",
+        "inspectorPackage",
+        "inspectorVersionSpec",
+        "inspectorResolvedVersion",
+        "inspectorCliExecuted",
+        "inspectorResult",
+        "inspectorExitCode",
+        "inspectorCredentialsSupplied",
+        "inspectorAuthStoreWritten",
+        "difference"
+      ],
+      "properties": {
+        "kind": {
+          "const": "official-inspector-cli-and-pinned-sdk"
+        },
+        "package": {
+          "const": "@modelcontextprotocol/sdk"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "transport": {
+          "const": "streamable-http"
+        },
+        "inspectorPackage": {
+          "const": "@modelcontextprotocol/inspector"
+        },
+        "inspectorVersionSpec": {
+          "const": "latest"
+        },
+        "inspectorResolvedVersion": {
+          "type": "string",
+          "pattern": "^2\\.[0-9]+\\.[0-9]+$"
+        },
+        "inspectorCliExecuted": {
+          "const": true
+        },
+        "inspectorResult": {
+          "const": "auth_required"
+        },
+        "inspectorExitCode": {
+          "const": 3
+        },
+        "inspectorCredentialsSupplied": {
+          "const": false
+        },
+        "inspectorAuthStoreWritten": {
+          "const": false
+        },
+        "difference": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "packedRuntime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "installedFromTarball",
+        "packageName",
+        "packageVersion"
+      ],
+      "properties": {
+        "source": {
+          "const": "npm-pack"
+        },
+        "installedFromTarball": {
+          "const": true
+        },
+        "packageName": {
+          "const": "toolspan-mcp"
+        },
+        "packageVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "syntheticConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instanceName",
+        "bind",
+        "publicBaseUrl",
+        "allowedRoot",
+        "stateLocation",
+        "ownerCredentialPersistence",
+        "passwordProvisioning",
+        "childEnvironment"
+      ],
+      "properties": {
+        "instanceName": {
+          "const": "toolspan-release-e2e"
+        },
+        "bind": {
+          "const": "127.0.0.1:ephemeral"
+        },
+        "publicBaseUrl": {
+          "const": "loopback-http-ephemeral"
+        },
+        "allowedRoot": {
+          "const": "tests/e2e-fixtures/remote-workspace"
+        },
+        "stateLocation": {
+          "const": "isolated-temporary-directory"
+        },
+        "ownerCredentialPersistence": {
+          "const": "bcrypt-hash-only"
+        },
+        "passwordProvisioning": {
+          "const": "stdin-and-loopback-oauth-form-only"
+        },
+        "childEnvironment": {
+          "const": "non-secret-allowlist"
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 14,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "const": "PASS"
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "fixtureIsolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetRelativePath",
+        "allowedRootExact",
+        "outsideWorkspaceOpenRejected",
+        "nonFixtureSentinel",
+        "nonFixtureSentinelUnchanged",
+        "writableSha256Before",
+        "writableSha256After",
+        "writableSha256Restored",
+        "directChangeObserved",
+        "protocolReadbackObserved",
+        "jobOutputWithinFixture"
+      ],
+      "properties": {
+        "targetRelativePath": {
+          "const": "tests/e2e-fixtures/remote-workspace"
+        },
+        "allowedRootExact": {
+          "const": true
+        },
+        "outsideWorkspaceOpenRejected": {
+          "const": true
+        },
+        "nonFixtureSentinel": {
+          "const": "README.md"
+        },
+        "nonFixtureSentinelUnchanged": {
+          "const": true
+        },
+        "writableSha256Before": {
+          "$ref": "#/$defs/sha256"
+        },
+        "writableSha256After": {
+          "$ref": "#/$defs/sha256"
+        },
+        "writableSha256Restored": {
+          "$ref": "#/$defs/sha256"
+        },
+        "directChangeObserved": {
+          "const": true
+        },
+        "protocolReadbackObserved": {
+          "const": true
+        },
+        "jobOutputWithinFixture": {
+          "const": true
+        }
+      }
+    },
+    "secretSafety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "passwordInCommandLine",
+        "passwordPersistedAsPlaintext",
+        "secretValuesInEvidence",
+        "secretValuesLogged",
+        "externalCredentialInheritedByServer"
+      ],
+      "properties": {
+        "passwordInCommandLine": {
+          "const": false
+        },
+        "passwordPersistedAsPlaintext": {
+          "const": false
+        },
+        "secretValuesInEvidence": {
+          "const": false
+        },
+        "secretValuesLogged": {
+          "const": false
+        },
+        "externalCredentialInheritedByServer": {
+          "const": false
+        }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "E-HOST-01",
+        "E-CODEX-01"
+      ],
+      "properties": {
+        "E-HOST-01": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "basis"
+          ],
+          "properties": {
+            "status": {
+              "const": "FAIL"
+            },
+            "basis": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "E-CODEX-01": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "reason"
+          ],
+          "properties": {
+            "status": {
+              "const": "EXTERNAL_GATE_PENDING"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "2.0",
+  "cloudflare": {
+    "available": true,
+    "zoneName": "aiqushi.top",
+    "preferredHostname": "mcp.aiqushi.top",
+    "zoneId": null,
+    "accountId": null,
+    "zoneStatus": "UNKNOWN",
+    "credentialAvailable": true,
+    "credentialType": "UNKNOWN",
+    "apiTokenEnv": "TOOLSPAN_E2E_CF_API_TOKEN",
+    "globalEmailEnv": "TOOLSPAN_E2E_CF_GLOBAL_EMAIL",
+    "globalKeyEnv": "CloudFlareAPIKEY"
+  },
+  "browserAutomation": {
+    "chromeAuthorized": true,
+    "computerUseAuthorized": true,
+    "humanCredentialEntryRequired": true,
+    "humanConsequentialConfirmationRequired": true
+  },
+  "chatgpt": {
+    "currentAccountAvailable": true,
+    "businessWorkspaceRequired": false,
+    "developerModeVisible": null,
+    "customMcpUiReachable": null,
+    "writeValidationRequired": false
+  },
+  "windows": {
+    "nativeVmAvailable": false,
+    "adminRights": false
+  },
+  "secondaryHost": {
+    "name": "Codex",
+    "available": true,
+    "writeE2eRequired": true
+  }
+}

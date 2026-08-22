@@ -1,0 +1,80 @@
+{
+  "snapshot": {
+    "firstRunRequired": false,
+    "instanceName": "Fixture desktop",
+    "core": { "state": "running", "version": "fixture-version", "managedByDesktop": true, "uptimeSeconds": 90, "nodeVersion": "v24-fixture", "nodePathConfigured": true },
+    "connection": { "localUrl": "http://127.0.0.1:8787/mcp", "publicBaseUrl": "https://mcp.example.test", "oauthDiscoveryUrl": "https://mcp.example.test/.well-known/oauth-authorization-server", "localReady": true, "publicReady": true },
+    "toolContract": { "available": 27, "total": 27 },
+    "workspaces": [{ "id": "root-fixture", "name": "Fixture root", "path": "C:\\ToolSpan-Fixture\\workspace", "access": "read-write" }],
+    "recentJobs": [],
+    "recentArtifacts": [],
+    "statePath": "C:\\ToolSpan-Fixture\\state",
+    "logPath": "C:\\ToolSpan-Fixture\\logs",
+    "ownerPasswordConfigured": true,
+    "lastUpdatedAt": "2026-01-15T10:00:00.000Z"
+  },
+  "hostSnapshot": {
+    "state": "running",
+    "productVersion": "fixture-version",
+    "instanceName": "Fixture desktop",
+    "localEndpoint": "http://127.0.0.1:8787/mcp",
+    "publicBaseUrl": "https://mcp.example.test",
+    "mcpTools": { "available": 27, "total": 27 },
+    "uptimeSeconds": 90,
+    "localReady": true,
+    "publicReady": true,
+    "recentJobs": [],
+    "recentArtifacts": []
+  },
+  "jobs": {
+    "jobs": [
+      {
+        "id": "job-complete",
+        "workspaceId": "root-fixture",
+        "runner": "npm-script",
+        "args": ["test"],
+        "status": "completed",
+        "pid": null,
+        "exitCode": 0,
+        "error": null,
+        "logPath": "C:\\ToolSpan-Fixture\\logs\\job.log",
+        "createdAt": "2026-01-15T09:00:00.000Z",
+        "startedAt": "2026-01-15T09:00:01.000Z",
+        "finishedAt": "2026-01-15T09:00:02.000Z"
+      },
+      {
+        "id": "job-timeout",
+        "workspaceId": "root-fixture",
+        "runner": "node-script",
+        "args": [],
+        "status": "timed_out",
+        "pid": null,
+        "exitCode": null,
+        "error": "Timed out",
+        "logPath": "C:\\ToolSpan-Fixture\\logs\\timeout.log",
+        "createdAt": "2026-01-15T09:05:00.000Z",
+        "startedAt": "2026-01-15T09:05:01.000Z",
+        "finishedAt": "2026-01-15T09:06:01.000Z"
+      }
+    ]
+  },
+  "artifacts": {
+    "artifacts": [{
+      "id": "artifact-fixture",
+      "workspaceId": "root-fixture",
+      "profile": "job_output",
+      "jobId": "job-complete",
+      "filePath": "C:\\ToolSpan-Fixture\\artifacts\\result.txt",
+      "mediaType": "text/plain",
+      "size": 42,
+      "sha256": "fixture-sha256",
+      "createdAt": "2026-01-15T09:00:03.000Z",
+      "publishedSlug": "fixture-public"
+    }]
+  },
+  "logs": {
+    "chunk": "2026-01-15T09:00:00.000Z INFO Runtime started\n2026-01-15T09:00:01.000Z WARN Public endpoint unavailable\n",
+    "nextCursor": 112,
+    "truncated": false
+  }
+}

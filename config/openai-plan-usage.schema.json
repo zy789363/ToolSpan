@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://toolspan.invalid/schemas/openai-plan-usage.schema.json",
+  "title": "ToolSpan OpenAI plan usage snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "verifiedAt",
+    "verificationStatus",
+    "verificationGaps",
+    "absoluteConversionPublished",
+    "sources",
+    "chat",
+    "codexLocalMessagesPer5h",
+    "flexibleCredits",
+    "mcpAvailability"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "verifiedAt": {
+      "type": "string",
+      "format": "date"
+    },
+    "verificationStatus": {
+      "enum": [
+        "OFFICIAL_SOURCES_VERIFIED",
+        "INCOMPLETE_OFFICIAL_COVERAGE"
+      ]
+    },
+    "verificationGaps": {
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z0-9_]+$"
+      }
+    },
+    "absoluteConversionPublished": {
+      "const": false
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "chatPricing",
+        "gpt55Limits",
+        "gpt56Limits",
+        "codexPricing",
+        "codexRateCard",
+        "businessChatRateCard",
+        "mcpAvailability"
+      ],
+      "properties": {
+        "chatPricing": { "$ref": "#/$defs/sourceUrl" },
+        "gpt55Limits": { "$ref": "#/$defs/sourceUrl" },
+        "gpt56Limits": { "$ref": "#/$defs/sourceUrl" },
+        "codexPricing": { "$ref": "#/$defs/sourceUrl" },
+        "codexRateCard": { "$ref": "#/$defs/sourceUrl" },
+        "businessChatRateCard": { "$ref": "#/$defs/sourceUrl" },
+        "mcpAvailability": { "$ref": "#/$defs/sourceUrl" }
+      }
+    },
+    "chat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["go", "plus", "pro5x", "pro20x", "business"],
+      "properties": {
+        "go": { "$ref": "#/$defs/chatCap" },
+        "plus": { "$ref": "#/$defs/chatCap" },
+        "pro5x": { "$ref": "#/$defs/chatMultiplier" },
+        "pro20x": { "$ref": "#/$defs/chatMultiplier" },
+        "business": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["instant"],
+          "properties": {
+            "instant": { "const": "unlimited-subject-to-guardrails" }
+          }
+        }
+      }
+    },
+    "codexLocalMessagesPer5h": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plus", "pro5x", "pro20x", "business"],
+      "properties": {
+        "plus": { "$ref": "#/$defs/modelRanges" },
+        "pro5x": { "$ref": "#/$defs/modelRanges" },
+        "pro20x": { "$ref": "#/$defs/modelRanges" },
+        "business": { "$ref": "#/$defs/modelRanges" }
+      }
+    },
+    "flexibleCredits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gpt56AverageCreditsPerMessage"],
+      "properties": {
+        "gpt56AverageCreditsPerMessage": { "$ref": "#/$defs/range" }
+      }
+    },
+    "mcpAvailability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plus", "pro", "business", "enterpriseEdu"],
+      "properties": {
+        "plus": { "$ref": "#/$defs/mcpState" },
+        "pro": { "$ref": "#/$defs/mcpState" },
+        "business": { "$ref": "#/$defs/mcpState" },
+        "enterpriseEdu": { "$ref": "#/$defs/mcpState" }
+      }
+    }
+  },
+  "$defs": {
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sourceUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://(chatgpt\\.com|help\\.openai\\.com|learn\\.chatgpt\\.com|developers\\.openai\\.com)/"
+    },
+    "range": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        { "$ref": "#/$defs/positiveInteger" },
+        { "$ref": "#/$defs/positiveInteger" }
+      ],
+      "items": false
+    },
+    "chatCap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instantMessages", "windowHours", "fallback"],
+      "properties": {
+        "instantMessages": { "$ref": "#/$defs/positiveInteger" },
+        "windowHours": { "$ref": "#/$defs/positiveInteger" },
+        "fallback": { "type": "string", "minLength": 1 }
+      }
+    },
+    "chatMultiplier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["multiplierVsPlus", "exactInstantCapPublished"],
+      "properties": {
+        "multiplierVsPlus": { "$ref": "#/$defs/positiveInteger" },
+        "exactInstantCapPublished": { "const": false }
+      }
+    },
+    "modelRanges": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sol", "terra", "luna"],
+      "properties": {
+        "sol": { "$ref": "#/$defs/range" },
+        "terra": { "$ref": "#/$defs/range" },
+        "luna": { "$ref": "#/$defs/range" }
+      }
+    },
+    "mcpState": {
+      "enum": [
+        "not-full-custom-mcp",
+        "read-fetch-only",
+        "full-write-modify-beta"
+      ]
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://toolspan.invalid/schemas/commercial-links.schema.json",
+  "title": "ToolSpan commercial link pairs",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "provider", "affiliateId", "coupon", "links"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "provider": { "const": "namesilo" },
+    "affiliateId": { "type": "string", "pattern": "^[A-Za-z0-9]+$" },
+    "coupon": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "links": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["home", "search", "pricing"],
+      "properties": {
+        "home": { "$ref": "#/$defs/linkPair" },
+        "search": { "$ref": "#/$defs/linkPair" },
+        "pricing": { "$ref": "#/$defs/linkPair" }
+      }
+    }
+  },
+  "$defs": {
+    "linkPair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["referral", "direct"],
+      "properties": {
+        "referral": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://www\\.namesilo\\.com/"
+        },
+        "direct": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://www\\.namesilo\\.com/"
+        }
+      }
+    }
+  }
+}

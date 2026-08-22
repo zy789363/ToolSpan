@@ -1,0 +1,100 @@
+{
+  "runtime.getSnapshot": {
+    "state": "running",
+    "productVersion": "0.4.0",
+    "instanceName": "Fixture workstation",
+    "localEndpoint": "http://127.0.0.1:8787/mcp",
+    "publicBaseUrl": "https://toolspan.example.test",
+    "mcpTools": { "available": 27, "total": 27 },
+    "uptimeSeconds": 42,
+    "localReady": true,
+    "publicReady": true,
+    "recentJobs": [
+      {
+        "id": "job-fixture-1",
+        "workspaceId": "workspace-fixture-1",
+        "runner": "npm-script",
+        "args": ["build"],
+        "status": "completed",
+        "pid": null,
+        "exitCode": 0,
+        "error": null,
+        "logPath": "C:\\ToolSpan-Fixture\\state\\jobs\\job-fixture-1.log",
+        "createdAt": "2026-08-20T10:00:00.000Z",
+        "startedAt": "2026-08-20T10:00:01.000Z",
+        "finishedAt": "2026-08-20T10:00:02.000Z"
+      }
+    ],
+    "recentArtifacts": [
+      {
+        "id": "artifact-fixture-1",
+        "workspaceId": "workspace-fixture-1",
+        "profile": "job_output",
+        "jobId": "job-fixture-1",
+        "filePath": "C:\\ToolSpan-Fixture\\state\\artifacts\\build.log",
+        "mediaType": "text/plain",
+        "size": 128,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "createdAt": "2026-08-20T10:00:03.000Z",
+        "publishedSlug": "fixture-published-slug"
+      }
+    ],
+    "firstRunRequired": false,
+    "statePath": "C:\\ToolSpan-Fixture\\state",
+    "logPath": "C:\\ToolSpan-Fixture\\state\\toolspan-service.log",
+    "workspaces": [
+      {
+        "id": "workspace-fixture-1",
+        "name": "Fixture workspace",
+        "path": "C:\\ToolSpan-Fixture\\workspace",
+        "access": "read-write"
+      }
+    ],
+    "managedByDesktop": true,
+    "nodeVersion": "v24.0.0",
+    "nodePathConfigured": true,
+    "ownerPasswordConfigured": true,
+    "oauthDiscoveryUrl": "https://toolspan.example.test/.well-known/oauth-authorization-server",
+    "lastUpdatedAt": "2026-08-20T10:00:04.000Z"
+  },
+  "runtime.listJobs": {
+    "jobs": [
+      {
+        "id": "job-fixture-1",
+        "workspaceId": "workspace-fixture-1",
+        "runner": "npm-script",
+        "args": ["build"],
+        "status": "completed",
+        "pid": null,
+        "exitCode": 0,
+        "error": null,
+        "logPath": "C:\\ToolSpan-Fixture\\state\\jobs\\job-fixture-1.log",
+        "createdAt": "2026-08-20T10:00:00.000Z",
+        "startedAt": "2026-08-20T10:00:01.000Z",
+        "finishedAt": "2026-08-20T10:00:02.000Z"
+      }
+    ]
+  },
+  "runtime.listArtifacts": {
+    "artifacts": [
+      {
+        "id": "artifact-fixture-1",
+        "workspaceId": "workspace-fixture-1",
+        "profile": "job_output",
+        "jobId": "job-fixture-1",
+        "filePath": "C:\\ToolSpan-Fixture\\state\\artifacts\\build.log",
+        "mediaType": "text/plain",
+        "size": 128,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "createdAt": "2026-08-20T10:00:03.000Z",
+        "publishedSlug": "fixture-published-slug"
+      }
+    ]
+  },
+  "runtime.getLogChunk": {
+    "chunk": "2026-08-20T10:00:04.000Z info runtime ready\n2026-08-20T10:00:05.000Z warn public endpoint unavailable\n",
+    "nextCursor": 116,
+    "truncated": false
+  },
+  "setup.getSnapshot": null
+}

@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ToolSpan Codex Goal State",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "goalVersion",
+    "currentStage",
+    "stages",
+    "environment",
+    "blockers",
+    "lastUpdated"
+  ],
+  "properties": {
+    "goalVersion": {
+      "const": "4.0"
+    },
+    "currentStage": {
+      "enum": [
+        "PRECHECK",
+        "CORE",
+        "DESKTOP",
+        "SETUP",
+        "RELEASE_GATES",
+        "DONE"
+      ]
+    },
+    "stages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "core",
+        "desktop",
+        "setup",
+        "release"
+      ],
+      "properties": {
+        "core": {
+          "$ref": "#/$defs/stage"
+        },
+        "desktop": {
+          "$ref": "#/$defs/stage"
+        },
+        "setup": {
+          "$ref": "#/$defs/stage"
+        },
+        "release": {
+          "$ref": "#/$defs/stage"
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean",
+          "null"
+        ]
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "classification",
+          "summary",
+          "nextAction"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "classification": {
+            "enum": [
+              "PREEXISTING_FAILURE",
+              "REGRESSION",
+              "BLOCKED_BY_ENVIRONMENT",
+              "BLOCKED_BY_EXTERNAL_ACCOUNT",
+              "BLOCKED_BY_OWNER_INPUT",
+              "BLOCKED_BY_UPSTREAM_CHANGE",
+              "BLOCKED_BY_HOST_PLAN_OR_POLICY",
+              "SPEC_CONFLICT"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "nextAction": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "lastUpdated": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "passedRequirements",
+        "failedRequirements"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "NOT_STARTED",
+            "IN_PROGRESS",
+            "IMPLEMENTATION_COMPLETE",
+            "PASS",
+            "FAIL",
+            "BLOCKED_BY_ENVIRONMENT",
+            "EXTERNAL_GATE_PENDING",
+            "NOT_CONFIGURED"
+          ]
+        },
+        "passedRequirements": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "failedRequirements": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "verificationReport": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

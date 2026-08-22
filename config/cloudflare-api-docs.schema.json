@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://toolspan.invalid/schemas/cloudflare-api-docs.schema.json",
+  "title": "ToolSpan dated Cloudflare API documentation snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "verifiedAt",
+    "staleAfterDays",
+    "verificationStatus",
+    "apiOrigin",
+    "apiBase",
+    "officialDocs",
+    "permissionsAtVerification",
+    "permissionLabelsAreReleaseAssertion",
+    "zoneApplyGate",
+    "authModes",
+    "runtimeCredentialHolder",
+    "fallbackText"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "verifiedAt": { "type": "string", "format": "date" },
+    "staleAfterDays": { "const": 30 },
+    "verificationStatus": { "const": "OFFICIAL_DOCS_VERIFIED" },
+    "apiOrigin": { "const": "https://api.cloudflare.com" },
+    "apiBase": { "const": "https://api.cloudflare.com/client/v4" },
+    "officialDocs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tokenPermissions", "zoneStatus", "tunnelCreate", "dnsRecords"],
+      "properties": {
+        "tokenPermissions": { "$ref": "#/$defs/cloudflareDocsUrl" },
+        "zoneStatus": { "$ref": "#/$defs/cloudflareDocsUrl" },
+        "tunnelCreate": { "$ref": "#/$defs/cloudflareDocsUrl" },
+        "dnsRecords": { "$ref": "#/$defs/cloudflareDocsUrl" }
+      }
+    },
+    "permissionsAtVerification": {
+      "type": "array",
+      "minItems": 3,
+      "items": { "$ref": "#/$defs/permission" }
+    },
+    "permissionLabelsAreReleaseAssertion": { "const": false },
+    "zoneApplyGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requiredStatus", "missingResult", "pendingResult"],
+      "properties": {
+        "requiredStatus": { "const": "active" },
+        "missingResult": { "const": "STOP_APPLY" },
+        "pendingResult": { "const": "STOP_APPLY" }
+      }
+    },
+    "authModes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scopedApiToken", "globalApiKey"],
+      "properties": {
+        "scopedApiToken": { "$ref": "#/$defs/authMode" },
+        "globalApiKey": {
+          "allOf": [
+            { "$ref": "#/$defs/authMode" },
+            {
+              "type": "object",
+              "required": ["legacy"],
+              "properties": { "legacy": { "const": true } }
+            }
+          ]
+        }
+      }
+    },
+    "runtimeCredentialHolder": { "const": "cloudflared-official-mechanism" },
+    "fallbackText": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "cloudflareDocsUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://developers\\.cloudflare\\.com/"
+    },
+    "permission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "name"],
+      "properties": {
+        "scope": { "enum": ["account", "zone"] },
+        "name": { "type": "string", "minLength": 1 }
+      }
+    },
+    "authMode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recommended", "headerNames", "persistSecretValue"],
+      "properties": {
+        "recommended": { "type": "boolean" },
+        "legacy": { "type": "boolean" },
+        "headerNames": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "persistSecretValue": { "const": false }
+      }
+    }
+  }
+}

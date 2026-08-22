@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ToolSpan External Test Environment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "cloudflare",
+    "browserAutomation",
+    "chatgpt",
+    "windows",
+    "secondaryHost"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "2.0"
+    },
+    "cloudflare": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "zoneName",
+        "preferredHostname",
+        "zoneId",
+        "accountId",
+        "zoneStatus",
+        "credentialAvailable",
+        "credentialType",
+        "apiTokenEnv",
+        "globalEmailEnv",
+        "globalKeyEnv"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "zoneName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "preferredHostname": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "zoneId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "accountId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "zoneStatus": {
+          "enum": [
+            "UNKNOWN",
+            "INITIALIZING",
+            "PENDING",
+            "ACTIVE",
+            "MOVED",
+            "NOT_FOUND"
+          ]
+        },
+        "credentialAvailable": {
+          "type": "boolean"
+        },
+        "credentialType": {
+          "enum": [
+            "SCOPED_API_TOKEN",
+            "GLOBAL_API_KEY",
+            "UNKNOWN"
+          ]
+        },
+        "apiTokenEnv": {
+          "type": "string"
+        },
+        "globalEmailEnv": {
+          "type": "string"
+        },
+        "globalKeyEnv": {
+          "type": "string"
+        }
+      }
+    },
+    "browserAutomation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "chromeAuthorized",
+        "computerUseAuthorized",
+        "humanCredentialEntryRequired",
+        "humanConsequentialConfirmationRequired"
+      ],
+      "properties": {
+        "chromeAuthorized": {
+          "type": "boolean"
+        },
+        "computerUseAuthorized": {
+          "type": "boolean"
+        },
+        "humanCredentialEntryRequired": {
+          "type": "boolean"
+        },
+        "humanConsequentialConfirmationRequired": {
+          "type": "boolean"
+        }
+      }
+    },
+    "chatgpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "currentAccountAvailable",
+        "businessWorkspaceRequired",
+        "developerModeVisible",
+        "customMcpUiReachable",
+        "writeValidationRequired"
+      ],
+      "properties": {
+        "currentAccountAvailable": {
+          "type": "boolean"
+        },
+        "businessWorkspaceRequired": {
+          "const": false
+        },
+        "developerModeVisible": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "customMcpUiReachable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "writeValidationRequired": {
+          "const": false
+        }
+      }
+    },
+    "windows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nativeVmAvailable",
+        "adminRights"
+      ],
+      "properties": {
+        "nativeVmAvailable": {
+          "type": "boolean"
+        },
+        "adminRights": {
+          "type": "boolean"
+        }
+      }
+    },
+    "secondaryHost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "available",
+        "writeE2eRequired"
+      ],
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "writeE2eRequired": {
+          "const": true
+        }
+      }
+    }
+  }
+}

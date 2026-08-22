@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "provider": "namesilo",
+  "verifiedAt": "2026-08-22",
+  "verificationStatus": "INCOMPLETE_OFFICIAL_COVERAGE",
+  "verificationGaps": [
+    "AFFILIATE_ID_STATUS_NOT_ESTABLISHED",
+    "COUPON_CURRENTNESS_NOT_ESTABLISHED"
+  ],
+  "exampleTld": "top",
+  "firstYearRegistrationUsd": 1.88,
+  "affiliateCouponCode": "toolspan",
+  "affiliateCouponDiscountUsd": 1.0,
+  "illustrativeEligibleTotalUsd": 0.88,
+  "conditional": true,
+  "staleAfterDays": 30,
+  "source": "https://www.namesilo.com/pricing",
+  "notes": [
+    "First-year example only; renewal can differ",
+    "Coupon eligibility and premium-domain restrictions are determined at checkout",
+    "Do not combine with NameSilo Discount Program unless current terms explicitly allow it"
+  ]
+}

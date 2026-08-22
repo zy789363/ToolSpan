@@ -1,0 +1,582 @@
+{
+  "goalVersion": "4.0",
+  "requirements": [
+    {
+      "id": "C-BRAND-01",
+      "stage": "CORE",
+      "summary": "Current public identity is ToolSpan with legacy references limited to an explicit allowlist",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:brand"
+    },
+    {
+      "id": "C-VERSION-01",
+      "stage": "CORE",
+      "summary": "The root package is the single version source and all runtime and release metadata agree",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:version"
+    },
+    {
+      "id": "C-CONFIG-01",
+      "stage": "CORE",
+      "summary": "Configuration precedence and legacy compatibility are deterministic",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm test -- tests/config.test.ts"
+    },
+    {
+      "id": "C-CONFIG-02",
+      "stage": "CORE",
+      "summary": "Main and doctor use the shared configuration resolver",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm test -- tests/config.test.ts tests/server-process.test.ts"
+    },
+    {
+      "id": "C-INSTANCE-01",
+      "stage": "CORE",
+      "summary": "instanceName is validated and visible only through authorized surfaces, never public health",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm test -- tests/config.test.ts tests/health.test.ts tests/mcp-tools.test.ts tests/oauth.test.ts"
+    },
+    {
+      "id": "C-MCP-01",
+      "stage": "CORE",
+      "summary": "The runtime registry exposes exactly the frozen 27 MCP tools and matches the golden contract",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:contract"
+    },
+    {
+      "id": "C-MCP-02",
+      "stage": "CORE",
+      "summary": "Production code has zero references to SDK private tool registries",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:contract"
+    },
+    {
+      "id": "C-MCP-03",
+      "stage": "CORE",
+      "summary": "MCP 2025-11-25 initialize, tools/list and tools/call integration paths pass",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm test -- tests/mcp-protocol.test.ts tests/mcp-tools.test.ts"
+    },
+    {
+      "id": "C-AUTH-01",
+      "stage": "CORE",
+      "summary": "OAuth consent identifies the ToolSpan instance, client, redirect origin and requested scopes",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm test -- tests/oauth.test.ts"
+    },
+    {
+      "id": "C-AUTH-02",
+      "stage": "CORE",
+      "summary": "Consent shows only requested known scopes, rejects unknown scopes and escapes untrusted text",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm test -- tests/oauth.test.ts"
+    },
+    {
+      "id": "C-AUTH-03",
+      "stage": "CORE",
+      "summary": "offline_access metadata and refresh-token rotation preserve but never expand Tool permissions",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm test -- tests/oauth.test.ts"
+    },
+    {
+      "id": "C-REL-01",
+      "stage": "CORE",
+      "summary": "The packed production artifact runs compiled password, doctor, start and health paths",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run smoke:core-release"
+    },
+    {
+      "id": "C-REL-02",
+      "stage": "CORE",
+      "summary": "Deterministic source verification is separated from installed runtime preflight",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run preflight -- --check-only"
+    },
+    {
+      "id": "C-SEC-01",
+      "stage": "CORE",
+      "summary": "Existing path, origin, OAuth, runner and process safety boundaries remain enforced",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm test"
+    },
+    {
+      "id": "C-DOC-01",
+      "stage": "CORE",
+      "summary": "English and Chinese documentation explain local versus remote tools, workflows and safety",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:docs"
+    },
+    {
+      "id": "C-DOC-02",
+      "stage": "CORE",
+      "summary": "ChatGPT Chat versus Codex usage content is generated from a schema-valid snapshot with stale fallback",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:openai-plan-usage"
+    },
+    {
+      "id": "C-OSS-01",
+      "stage": "CORE",
+      "summary": "Open-source foundation files are complete and contain no invented maintainer identity",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:oss"
+    },
+    {
+      "id": "C-CI-01",
+      "stage": "CORE",
+      "summary": "Core CI is parseable, SHA-pinned and uses least privilege without unsafe pull_request_target or public self-hosted jobs",
+      "gateType": "deterministic",
+      "blockingFor": ["CORE_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:ci"
+    },
+    {
+      "id": "D-TOPO-01",
+      "stage": "DESKTOP",
+      "summary": "Desktop has an independent package and lockfile and Core install does not pull GUI dependencies",
+      "gateType": "deterministic",
+      "blockingFor": ["DESKTOP_SOURCE_COMPLETE"],
+      "verificationCommand": "npm run verify:desktop:source"
+    },
+    {
+      "id": "D-PROTO-01",
+      "stage": "DESKTOP",
+      "summary": "Protocol v1 schema, hello fixture, recovery and host integration are deterministic",
+      "gateType": "deterministic",
+      "blockingFor": ["DESKTOP_SOURCE_COMPLETE"],
+      "verificationCommand": "npm run desktop:protocol:check"
+    },
+    {
+      "id": "D-ARCH-01",
+      "stage": "DESKTOP",
+      "summary": "Desktop adds no public Admin route, arbitrary shell, MCP client, gateway or Agent Runtime",
+      "gateType": "deterministic",
+      "blockingFor": ["DESKTOP_SOURCE_COMPLETE"],
+      "verificationCommand": "npm run verify:desktop:source"
+    },
+    {
+      "id": "D-NODE-01",
+      "stage": "DESKTOP",
+      "summary": "Node discovery validates configured, PATH, common-install and manual-selection candidates",
+      "gateType": "deterministic",
+      "blockingFor": ["DESKTOP_SOURCE_COMPLETE"],
+      "verificationCommand": "npm run verify:desktop:source"
+    },
+    {
+      "id": "D-PROC-01",
+      "stage": "DESKTOP",
+      "summary": "Owned child lifecycle uses a nonce and never kills an unknown or external process",
+      "gateType": "deterministic",
+      "blockingFor": ["DESKTOP_SOURCE_COMPLETE"],
+      "verificationCommand": "npm run verify:desktop:source"
+    },
+    {
+      "id": "D-CONFIG-01",
+      "stage": "DESKTOP",
+      "summary": "First run writes validated config atomically with conflict detection, rollback and bounded backups",
+      "gateType": "deterministic",
+      "blockingFor": ["DESKTOP_SOURCE_COMPLETE"],
+      "verificationCommand": "npm run verify:desktop:source"
+    },
+    {
+      "id": "D-PASS-01",
+      "stage": "DESKTOP",
+      "summary": "Password hashing occurs in Rust and plaintext never enters Node protocol, persistence or diagnostics",
+      "gateType": "deterministic",
+      "blockingFor": ["DESKTOP_SOURCE_COMPLETE"],
+      "verificationCommand": "npm run verify:desktop:source"
+    },
+    {
+      "id": "D-UI-01",
+      "stage": "DESKTOP",
+      "summary": "Onboarding, Overview and Connection render real recoverable runtime state",
+      "gateType": "deterministic",
+      "blockingFor": ["DESKTOP_SOURCE_COMPLETE"],
+      "verificationCommand": "npm run verify:desktop:source"
+    },
+    {
+      "id": "D-FEATURE-01",
+      "stage": "DESKTOP",
+      "summary": "Allowed roots, jobs, artifacts and sanitized logs preserve confirmations and safety boundaries",
+      "gateType": "deterministic",
+      "blockingFor": ["DESKTOP_SOURCE_COMPLETE"],
+      "verificationCommand": "npm run verify:desktop:source"
+    },
+    {
+      "id": "D-TRAY-01",
+      "stage": "DESKTOP",
+      "summary": "Tray actions are bounded and respect owned versus external Core lifecycle",
+      "gateType": "deterministic",
+      "blockingFor": ["DESKTOP_SOURCE_COMPLETE"],
+      "verificationCommand": "npm run verify:desktop:source"
+    },
+    {
+      "id": "D-I18N-01",
+      "stage": "DESKTOP",
+      "summary": "English and zh-CN locale trees have zero missing keys",
+      "gateType": "deterministic",
+      "blockingFor": ["DESKTOP_SOURCE_COMPLETE"],
+      "verificationCommand": "npm run verify:desktop:source"
+    },
+    {
+      "id": "D-THEME-01",
+      "stage": "DESKTOP",
+      "summary": "Light, Dark and System themes are implemented and tested",
+      "gateType": "deterministic",
+      "blockingFor": ["DESKTOP_SOURCE_COMPLETE"],
+      "verificationCommand": "npm run verify:desktop:source"
+    },
+    {
+      "id": "D-A11Y-01",
+      "stage": "DESKTOP",
+      "summary": "Critical pages have zero serious or critical axe findings",
+      "gateType": "deterministic",
+      "blockingFor": ["DESKTOP_SOURCE_COMPLETE"],
+      "verificationCommand": "npm run verify:desktop:source"
+    },
+    {
+      "id": "D-HEADLESS-01",
+      "stage": "DESKTOP",
+      "summary": "Desktop changes preserve deterministic Core headless verification and packed-release smoke",
+      "gateType": "deterministic",
+      "blockingFor": ["DESKTOP_SOURCE_COMPLETE"],
+      "verificationCommand": "npm run verify:desktop:source"
+    },
+    {
+      "id": "D-WIN-01",
+      "stage": "DESKTOP",
+      "summary": "Windows native build/install/tray smoke",
+      "gateType": "native",
+      "blockingFor": ["RELEASE_READY"],
+      "verificationCommand": "npm run verify:desktop:windows",
+      "manualEvidence": "Dated Windows native validation report with installer, tray and process smoke evidence"
+    },
+    {
+      "id": "S-LOCK-01",
+      "stage": "SETUP",
+      "summary": "Only one applying or rolling-back setup session may hold the versioned process-aware lock",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run setup:test"
+    },
+    {
+      "id": "S-STATE-01",
+      "stage": "SETUP",
+      "summary": "Versioned setup state and journal force crash recovery through reconciliation rather than an automatic write",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run setup:test"
+    },
+    {
+      "id": "S-CRED-01",
+      "stage": "SETUP",
+      "summary": "Cloudflare management credentials are session-only and absent from persistence, logs and diagnostics",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:setup:security"
+    },
+    {
+      "id": "S-TUNNEL-CRED-01",
+      "stage": "SETUP",
+      "summary": "Tunnel runtime credentials remain inside the official cloudflared mechanism and never enter ToolSpan persistence or command lines",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:setup:security"
+    },
+    {
+      "id": "S-CF-MANUAL-01",
+      "stage": "SETUP",
+      "summary": "The complete guided manual flow works without giving ToolSpan a Cloudflare management credential",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:setup-docs"
+    },
+    {
+      "id": "S-CF-ZONE-01",
+      "stage": "SETUP",
+      "summary": "A missing or pending Cloudflare zone blocks Apply and routes to registrar nameserver onboarding until Active",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run setup:test"
+    },
+    {
+      "id": "S-CF-TOKEN-01",
+      "stage": "SETUP",
+      "summary": "The scoped-token path performs verify, dry run, confirmation, apply and deterministic verification",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run setup:test"
+    },
+    {
+      "id": "S-CF-GLOBAL-01",
+      "stage": "SETUP",
+      "summary": "Global API Key mode is legacy-only, warns about full access, requires confirmation and never persists credentials",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run setup:test"
+    },
+    {
+      "id": "S-CF-IDEMP-01",
+      "stage": "SETUP",
+      "summary": "A second setup run reuses proven resources and creates zero duplicates",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run setup:test"
+    },
+    {
+      "id": "S-CF-ROLLBACK-01",
+      "stage": "SETUP",
+      "summary": "Rollback is owned-only, fingerprint-guarded and truthfully reports full, partial and credential-reentry outcomes",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run setup:test"
+    },
+    {
+      "id": "S-CGPT-01",
+      "stage": "SETUP",
+      "summary": "The dated ChatGPT guide provides copy materials and never treats user confirmation as host validation",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:setup-docs"
+    },
+    {
+      "id": "S-AGENT-01",
+      "stage": "SETUP",
+      "summary": "The safe manifest and Prompt Pack expose only approved fields and all six human checkpoints",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:setup-prompts"
+    },
+    {
+      "id": "S-DOMAIN-01",
+      "stage": "SETUP",
+      "summary": "Existing-domain, any-registrar, referral and no-referral paths remain equally available",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:commercial-links"
+    },
+    {
+      "id": "S-AFF-01",
+      "stage": "SETUP",
+      "summary": "Referral and coupon attribution have adjacent disclosure while the direct path contains no referral parameter",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:affiliate-disclosure"
+    },
+    {
+      "id": "S-AFF-02",
+      "stage": "SETUP",
+      "summary": "Stale offers hide price and coupon claims without dark patterns, auto-open, auto-copy or click telemetry",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:commercial-links"
+    },
+    {
+      "id": "S-ASSET-01",
+      "stage": "SETUP",
+      "summary": "Verified vendor assets are optional and missing assets produce a safe text-only fallback",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:vendor-assets"
+    },
+    {
+      "id": "S-URL-01",
+      "stage": "SETUP",
+      "summary": "Setup networking enforces fixed origins, configured HTTPS targets and bounded redirect, scheme, private-address and response rules",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run setup:test"
+    },
+    {
+      "id": "S-DIAG-01",
+      "stage": "SETUP",
+      "summary": "Setup receipts and diagnostics contain non-secret evidence and zero credentials, passwords or hashes",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:setup:security"
+    },
+    {
+      "id": "S-MOCK-01",
+      "stage": "SETUP",
+      "summary": "The local Cloudflare mock covers contract, retry, conflict, idempotency and redaction scenarios with zero CI secrets",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run setup:test"
+    },
+    {
+      "id": "S-EXTENV-01",
+      "stage": "SETUP",
+      "summary": "The external test manifest contains only flags, IDs and secret environment-variable names; missing capabilities remain blockers",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run smoke:setup-manifest"
+    },
+    {
+      "id": "S-PACK-01",
+      "stage": "SETUP",
+      "summary": "The packed source contains required Setup docs, prompts, schemas and snapshots but no runtime state or secrets",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run smoke:setup-manifest"
+    },
+    {
+      "id": "E-HOST-01",
+      "stage": "RELEASE",
+      "summary": "MCP Inspector validates initialize, exact 27 tools, read, authorized mutation and insufficient-scope behavior",
+      "gateType": "external",
+      "blockingFor": ["RELEASE_READY"],
+      "manualEvidence": "Dated sanitized MCP Inspector protocol E2E report"
+    },
+    {
+      "id": "E-OWNER-01",
+      "stage": "RELEASE",
+      "summary": "Owner publication/IP/trademark approval",
+      "gateType": "owner",
+      "blockingFor": ["RELEASE_READY"],
+      "manualEvidence": "Maintainer confirmation"
+    },
+    {
+      "id": "E-CF-TOKEN-01",
+      "stage": "RELEASE",
+      "summary": "Real Cloudflare E2E on aiqushi.top with scoped API Token; active-zone preflight, dry-run, apply, verify, idempotency and owned-only cleanup",
+      "gateType": "external",
+      "blockingFor": ["ONE_CLICK_CLOUDFLARE_VALIDATED"],
+      "manualEvidence": "Dated sanitized aiqushi.top report; secret value never recorded"
+    },
+    {
+      "id": "E-CF-GLOBAL-01",
+      "stage": "RELEASE",
+      "summary": "Global API Key legacy path optional validation on aiqushi.top with explicit user confirmation; never a Release hard gate",
+      "gateType": "external",
+      "blockingFor": [],
+      "manualEvidence": "Optional dated sanitized legacy-path report; key not stored and no unknown resources modified"
+    },
+    {
+      "id": "E-CF-WIN-01",
+      "stage": "RELEASE",
+      "summary": "Windows cloudflared service install/start/reboot/uninstall validated",
+      "gateType": "native",
+      "blockingFor": ["WINDOWS_ONE_CLICK_VALIDATED"],
+      "manualEvidence": "Dated Windows admin VM report with service persistence and safe uninstall evidence"
+    },
+    {
+      "id": "E-OAUTH-SOAK-01",
+      "stage": "RELEASE",
+      "summary": "Optional ChatGPT current-account refresh/reconnect observation; deterministic refresh lifecycle remains Core gate",
+      "gateType": "external",
+      "blockingFor": [],
+      "manualEvidence": "Optional >1h sanitized soak report; deterministic refresh grant is covered in Core"
+    },
+    {
+      "id": "S-OWNER-PROFILE-01",
+      "stage": "SETUP",
+      "summary": "Owner profile fixes zone aiqushi.top, preferred hostname mcp.aiqushi.top, browser/computer-use authorization and no-Business policy without storing secrets",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run verify:setup"
+    },
+    {
+      "id": "S-BROWSER-NS-01",
+      "stage": "SETUP",
+      "summary": "When aiqushi.top zone is missing/pending, browser-assisted Cloudflare/NameSilo nameserver flow pauses before final Save and never touches other domains",
+      "gateType": "deterministic",
+      "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
+      "verificationCommand": "npm run check:setup-prompts"
+    },
+    {
+      "id": "E-CODEX-01",
+      "stage": "RELEASE",
+      "summary": "Codex validates ToolSpan real remote read plus one write/apply_patch and deterministic job against synthetic fixture",
+      "gateType": "external",
+      "blockingFor": ["RELEASE_READY"],
+      "manualEvidence": "Dated sanitized Codex E2E report proving remote ToolSpan instance was the target"
+    },
+    {
+      "id": "E-CGPT-UI-01",
+      "stage": "RELEASE",
+      "summary": "Owner current ChatGPT account UI compatibility smoke via authorized Chrome/computer-use; Business/full-write is not required",
+      "gateType": "external",
+      "blockingFor": [],
+      "manualEvidence": "Optional dated report: developer mode/custom MCP UI/OAuth/tool scan and any actually available read capability; plan blocks recorded truthfully"
+    },
+    {
+      "id": "E-GH-01",
+      "stage": "RELEASE",
+      "summary": "GitHub security settings, branch ruleset and private vulnerability reporting are configured and evidenced",
+      "gateType": "external",
+      "blockingFor": ["RELEASE_READY"],
+      "manualEvidence": "Dated sanitized GitHub settings report from the publication repository"
+    },
+    {
+      "id": "E-WIN-01",
+      "stage": "RELEASE",
+      "summary": "Windows x64 package build, install, tray and owned-process smoke are validated",
+      "gateType": "native",
+      "blockingFor": ["RELEASE_READY"],
+      "manualEvidence": "Dated Windows x64 validation report naming installer, tray and process smoke evidence"
+    },
+    {
+      "id": "E-SIGN-01",
+      "stage": "RELEASE",
+      "summary": "Windows code signing is either validated or truthfully left not configured for an unsigned release",
+      "gateType": "owner",
+      "blockingFor": [],
+      "manualEvidence": "Maintainer signing decision and, when configured, dated signature verification evidence"
+    },
+    {
+      "id": "E-AFF-01",
+      "stage": "RELEASE",
+      "summary": "Affiliate link, coupon and offer claims are freshly verified or the commercial UI uses stale fallback",
+      "gateType": "external",
+      "blockingFor": ["COMMERCIAL_CTA_CURRENT"],
+      "manualEvidence": "Dated offer-currentness report or deterministic evidence that STALE_FALLBACK is active"
+    },
+    {
+      "id": "E-ASSET-01",
+      "stage": "RELEASE",
+      "summary": "NameSilo logo and banner rights and provenance are confirmed or the product uses text-only fallback",
+      "gateType": "owner",
+      "blockingFor": ["VENDOR_ASSET_CLAIM"],
+      "manualEvidence": "Owner rights and provenance confirmation or TEXT_ONLY_FALLBACK evidence"
+    },
+    {
+      "id": "E-DATA-01",
+      "stage": "RELEASE",
+      "summary": "OpenAI quota snapshot is freshly verified before numeric claims or stale fallback hides those claims",
+      "gateType": "external",
+      "blockingFor": ["NUMERIC_OPENAI_QUOTA_CLAIM"],
+      "manualEvidence": "Dated official-source freshness report or deterministic STALE_FALLBACK evidence"
+    },
+    {
+      "id": "R-EXTENV-01",
+      "stage": "RELEASE",
+      "summary": "External test environment schema v2 contains only capability flags, Cloudflare IDs and Secret environment-variable names with zero Secret values",
+      "gateType": "deterministic",
+      "blockingFor": ["RELEASE_READY"],
+      "verificationCommand": "npm run check:test-environment"
+    },
+    {
+      "id": "R-DRYRUN-01",
+      "stage": "RELEASE",
+      "summary": "Release dry-run builds source artifacts, packs npm, inventories Desktop bundles and emits checksums plus SPDX and CycloneDX SBOMs without tag or publish",
+      "gateType": "deterministic",
+      "blockingFor": ["RELEASE_READY"],
+      "verificationCommand": "npm run release:dry-run"
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "entries": [
+    {
+      "id": "history-changelog",
+      "pathPattern": "^CHANGELOG\\.md$",
+      "contentPattern": "web[ _-]?gpt",
+      "maxOccurrences": 20,
+      "reason": "Historical release and migration record"
+    },
+    {
+      "id": "readme-former-name",
+      "pathPattern": "^README(?:\\.zh-CN)?\\.md$",
+      "contentPattern": "(?:formerly.*WebGPT|旧项目名.*WebGPT)",
+      "maxOccurrences": 2,
+      "reason": "One former-name notice in each maintained language"
+    },
+    {
+      "id": "readme-legacy-config",
+      "pathPattern": "^README(?:\\.zh-CN)?\\.md$",
+      "contentPattern": "(?:WEBGPT_CONFIG|webgpt\\.config\\.json).*(?:legacy|Legacy|旧|警告|warn)",
+      "maxOccurrences": 4,
+      "reason": "Documented configuration migration compatibility"
+    },
+    {
+      "id": "migration-docs",
+      "pathPattern": "^docs/(?:migration|release/[^/]+-migration)[^/]*\\.md$",
+      "contentPattern": "web[ _-]?gpt",
+      "maxOccurrences": 100,
+      "reason": "Dedicated migration documentation"
+    },
+    {
+      "id": "legacy-config-source",
+      "pathPattern": "^src/config\\.ts$",
+      "contentPattern": "(?:WEBGPT_CONFIG|webgpt\\.config\\.json|legacy WebGPT)",
+      "maxOccurrences": 12,
+      "reason": "Frozen legacy configuration resolver inputs and warning"
+    },
+    {
+      "id": "legacy-storage-source",
+      "pathPattern": "^src/(?:artifacts/artifact-service|files/file-service)\\.ts$",
+      "contentPattern": "\\.webgpt(?:-delete|-restore)?",
+      "maxOccurrences": 4,
+      "reason": "Backward-compatible recovery and exclusion names"
+    },
+    {
+      "id": "legacy-desktop-host-log-name",
+      "pathPattern": "^src/desktop-host/production-service\\.ts$",
+      "contentPattern": "webgpt-service\\.log",
+      "maxOccurrences": 1,
+      "reason": "Desktop reads the frozen legacy service log filename during migration"
+    },
+    {
+      "id": "legacy-test-fixtures",
+      "pathPattern": "^tests/.*\\.test\\.ts$",
+      "contentPattern": "(?:WEBGPT_CONFIG|webgpt\\.config\\.json|\\.webgpt(?:-|/)|webgpt-[a-z])",
+      "maxOccurrences": 200,
+      "reason": "Tests for legacy inputs and non-public temporary fixture prefixes"
+    },
+    {
+      "id": "legacy-ignore",
+      "pathPattern": "^\\.gitignore$",
+      "contentPattern": "^\\.webgpt/$",
+      "maxOccurrences": 1,
+      "reason": "Ignore legacy runtime state"
+    },
+    {
+      "id": "legacy-root-config-ignore",
+      "pathPattern": "^\\.gitignore$",
+      "contentPattern": "^webgpt\\.config\\.json$",
+      "maxOccurrences": 1,
+      "reason": "Ignore the legacy root configuration filename during migration"
+    },
+    {
+      "id": "legacy-example-path",
+      "pathPattern": "^webgpt\\.config\\.example\\.json$",
+      "contentPattern": "@path",
+      "maxOccurrences": 1,
+      "reason": "Legacy configuration example retained for migration"
+    },
+    {
+      "id": "legacy-script-path",
+      "pathPattern": "^scripts/run-webgpt\\.ps1$",
+      "contentPattern": "@path",
+      "maxOccurrences": 1,
+      "reason": "Legacy script entry retained as a compatibility wrapper"
+    },
+    {
+      "id": "legacy-script-wrapper",
+      "pathPattern": "^scripts/run-webgpt\\.ps1$",
+      "contentPattern": "(?:legacy|Legacy|兼容).*web[ _-]?gpt|web[ _-]?gpt.*(?:legacy|Legacy|兼容)",
+      "maxOccurrences": 4,
+      "reason": "Compatibility wrapper must identify itself as legacy"
+    },
+    {
+      "id": "legacy-runner-log-name",
+      "pathPattern": "^scripts/run-webgpt\\.ps1$",
+      "contentPattern": "^\\s*\\$LogPath = Join-Path \\$StateDirectory \"webgpt-service\\.log\"$",
+      "maxOccurrences": 1,
+      "reason": "Preserve the legacy scheduled-task log filename for existing installations"
+    },
+    {
+      "id": "legacy-install-task-name",
+      "pathPattern": "^scripts/install-scheduled-task\\.ps1$",
+      "contentPattern": "^\\s*\\[string\\]\\$TaskName = \"WebGPT-MCP\",$",
+      "maxOccurrences": 1,
+      "reason": "Preserve the legacy default task identity for existing installation automation"
+    },
+    {
+      "id": "legacy-install-wrapper-path",
+      "pathPattern": "^scripts/install-scheduled-task\\.ps1$",
+      "contentPattern": "^\\s*\\$RunScript = .*\"scripts\\\\run-webgpt\\.ps1\".*$",
+      "maxOccurrences": 1,
+      "reason": "Install the retained legacy-named compatibility wrapper"
+    },
+    {
+      "id": "legacy-install-task-description",
+      "pathPattern": "^scripts/install-scheduled-task\\.ps1$",
+      "contentPattern": "^\\s*Description = \"Run the local WebGPT MCP server at user logon\"$",
+      "maxOccurrences": 1,
+      "reason": "Preserve legacy task metadata for existing scheduled-task automation"
+    },
+    {
+      "id": "legacy-uninstall-task-name",
+      "pathPattern": "^scripts/uninstall-scheduled-task\\.ps1$",
+      "contentPattern": "^\\s*\\[string\\]\\$TaskName = \"WebGPT-MCP\"$",
+      "maxOccurrences": 1,
+      "reason": "Preserve the legacy default task identity so existing tasks remain removable"
+    }
+  ]
+}

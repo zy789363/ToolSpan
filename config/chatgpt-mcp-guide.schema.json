@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://toolspan.invalid/schemas/chatgpt-mcp-guide.schema.json",
+  "title": "ToolSpan dated ChatGPT MCP guide snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "verifiedAt",
+    "staleAfterDays",
+    "verificationStatus",
+    "source",
+    "productLabel",
+    "developerModePath",
+    "connectionPage",
+    "publicMcpPath",
+    "expectedToolCount",
+    "availabilityDependsOnAccountOrWorkspacePolicy",
+    "businessWorkspaceRequired",
+    "writeValidationRequiredInChatGpt",
+    "truthfulStatuses",
+    "fallbackText"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "verifiedAt": { "type": "string", "format": "date" },
+    "staleAfterDays": { "const": 30 },
+    "verificationStatus": { "const": "OFFICIAL_DOCS_VERIFIED" },
+    "source": {
+      "const": "https://developers.openai.com/plugins/deploy/connect-chatgpt"
+    },
+    "productLabel": { "type": "string", "minLength": 1 },
+    "developerModePath": {
+      "type": "array",
+      "minItems": 3,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "connectionPage": { "const": "https://chatgpt.com/plugins" },
+    "publicMcpPath": { "const": "/mcp" },
+    "expectedToolCount": { "const": 27 },
+    "availabilityDependsOnAccountOrWorkspacePolicy": { "const": true },
+    "businessWorkspaceRequired": { "const": false },
+    "writeValidationRequiredInChatGpt": { "const": false },
+    "truthfulStatuses": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        { "const": "MANUAL_PENDING" },
+        { "const": "USER_CONFIRMED" },
+        { "const": "VALIDATED" },
+        { "const": "BLOCKED_BY_HOST_PLAN_OR_POLICY" }
+      ],
+      "items": false
+    },
+    "fallbackText": { "type": "string", "minLength": 1 }
+  }
+}

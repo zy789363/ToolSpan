@@ -1,0 +1,185 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`synthetic visual fixtures > 'connection' 'dark' 1`] = `
+{
+  "cardCount": 5,
+  "fixture": "connection",
+  "heading": "Connection",
+  "metricCount": 0,
+  "navigation": [
+    "Overview",
+    "Setup",
+    "Connection",
+    "Workspaces",
+    "Jobs",
+    "Artifacts",
+    "Logs",
+    "Settings",
+  ],
+  "theme": "dark",
+}
+`;
+
+exports[`synthetic visual fixtures > 'connection' 'light' 1`] = `
+{
+  "cardCount": 5,
+  "fixture": "connection",
+  "heading": "Connection",
+  "metricCount": 0,
+  "navigation": [
+    "Overview",
+    "Setup",
+    "Connection",
+    "Workspaces",
+    "Jobs",
+    "Artifacts",
+    "Logs",
+    "Settings",
+  ],
+  "theme": "light",
+}
+`;
+
+exports[`synthetic visual fixtures > 'overview' 'dark' 1`] = `
+{
+  "cardCount": 7,
+  "fixture": "overview",
+  "heading": "Demo workstation",
+  "metricCount": 4,
+  "navigation": [
+    "Overview",
+    "Setup",
+    "Connection",
+    "Workspaces",
+    "Jobs",
+    "Artifacts",
+    "Logs",
+    "Settings",
+  ],
+  "theme": "dark",
+}
+`;
+
+exports[`synthetic visual fixtures > 'overview' 'light' 1`] = `
+{
+  "cardCount": 7,
+  "fixture": "overview",
+  "heading": "Demo workstation",
+  "metricCount": 4,
+  "navigation": [
+    "Overview",
+    "Setup",
+    "Connection",
+    "Workspaces",
+    "Jobs",
+    "Artifacts",
+    "Logs",
+    "Settings",
+  ],
+  "theme": "light",
+}
+`;
+
+exports[`synthetic visual fixtures > 'settings' 'dark' 1`] = `
+{
+  "cardCount": 4,
+  "fixture": "settings",
+  "heading": "Settings",
+  "metricCount": 0,
+  "navigation": [
+    "Overview",
+    "Setup",
+    "Connection",
+    "Workspaces",
+    "Jobs",
+    "Artifacts",
+    "Logs",
+    "Settings",
+  ],
+  "theme": "dark",
+}
+`;
+
+exports[`synthetic visual fixtures > 'settings' 'light' 1`] = `
+{
+  "cardCount": 4,
+  "fixture": "settings",
+  "heading": "Settings",
+  "metricCount": 0,
+  "navigation": [
+    "Overview",
+    "Setup",
+    "Connection",
+    "Workspaces",
+    "Jobs",
+    "Artifacts",
+    "Logs",
+    "Settings",
+  ],
+  "theme": "light",
+}
+`;
+
+exports[`synthetic visual fixtures > 'setup' 'dark' 1`] = `
+{
+  "cardCount": 6,
+  "fixture": "setup",
+  "heading": "Setup Center",
+  "metricCount": 0,
+  "navigation": [
+    "Overview",
+    "Setup",
+    "Connection",
+    "Workspaces",
+    "Jobs",
+    "Artifacts",
+    "Logs",
+    "Settings",
+  ],
+  "theme": "dark",
+}
+`;
+
+exports[`synthetic visual fixtures > 'setup' 'light' 1`] = `
+{
+  "cardCount": 6,
+  "fixture": "setup",
+  "heading": "Setup Center",
+  "metricCount": 0,
+  "navigation": [
+    "Overview",
+    "Setup",
+    "Connection",
+    "Workspaces",
+    "Jobs",
+    "Artifacts",
+    "Logs",
+    "Settings",
+  ],
+  "theme": "light",
+}
+`;
+
+exports[`synthetic visual fixtures > first-run dark 1`] = `
+{
+  "actions": [
+    "Set up this computer",
+  ],
+  "fixture": "first-run",
+  "heading": "Welcome to ToolSpan",
+  "steps": "Step 1 of 7",
+  "theme": "dark",
+}
+`;
+
+exports[`synthetic visual fixtures > first-run light 1`] = `
+{
+  "actions": [
+    "Set up this computer",
+  ],
+  "fixture": "first-run",
+  "heading": "Welcome to ToolSpan",
+  "steps": "Step 1 of 7",
+  "theme": "light",
+}
+`;

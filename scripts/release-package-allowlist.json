@@ -1,0 +1,35 @@
+{
+  "required": [
+    "package.json",
+    "npm-shrinkwrap.json",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "dist/main.js",
+    "dist/cli/init-password.js",
+    "dist/cli/doctor.js",
+    "scripts/package-runtime-policy.mjs",
+    "scripts/runtime-preflight.mjs",
+    "toolspan.config.example.json"
+  ],
+  "allowedExact": [
+    "package.json",
+    "npm-shrinkwrap.json",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "SECURITY.md",
+    "SUPPORT.md",
+    "CHANGELOG.md",
+    "toolspan.config.example.json",
+    "scripts/package-runtime-policy.mjs",
+    "scripts/runtime-preflight.mjs",
+    "deploy/cloudflared/config.example.yml"
+  ],
+  "allowedPrefixes": [
+    "dist/",
+    "docs/",
+    "config/",
+    "schemas/"
+  ]
+}

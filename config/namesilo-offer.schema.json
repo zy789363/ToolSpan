@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://toolspan.invalid/schemas/namesilo-offer.schema.json",
+  "title": "ToolSpan NameSilo conditional offer snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "provider",
+    "verifiedAt",
+    "verificationStatus",
+    "verificationGaps",
+    "exampleTld",
+    "firstYearRegistrationUsd",
+    "affiliateCouponCode",
+    "affiliateCouponDiscountUsd",
+    "illustrativeEligibleTotalUsd",
+    "conditional",
+    "staleAfterDays",
+    "source",
+    "notes"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "provider": { "const": "namesilo" },
+    "verifiedAt": { "type": "string", "format": "date" },
+    "verificationStatus": {
+      "enum": [
+        "OFFICIAL_SOURCES_VERIFIED",
+        "INCOMPLETE_OFFICIAL_COVERAGE"
+      ]
+    },
+    "verificationGaps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z0-9_]+$"
+      }
+    },
+    "exampleTld": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "firstYearRegistrationUsd": { "type": "number", "minimum": 0 },
+    "affiliateCouponCode": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "affiliateCouponDiscountUsd": { "type": "number", "minimum": 0 },
+    "illustrativeEligibleTotalUsd": { "type": "number", "minimum": 0 },
+    "conditional": { "const": true },
+    "staleAfterDays": { "const": 30 },
+    "source": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://www\\.namesilo\\.com/"
+    },
+    "notes": {
+      "type": "array",
+      "minItems": 3,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

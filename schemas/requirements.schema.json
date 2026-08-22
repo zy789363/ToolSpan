@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ToolSpan Goal Requirements",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "goalVersion",
+    "requirements"
+  ],
+  "properties": {
+    "goalVersion": {
+      "const": "4.0"
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "stage",
+          "summary",
+          "gateType",
+          "blockingFor"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9-]+$"
+          },
+          "stage": {
+            "enum": [
+              "CORE",
+              "DESKTOP",
+              "SETUP",
+              "RELEASE"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "gateType": {
+            "enum": [
+              "deterministic",
+              "native",
+              "external",
+              "owner"
+            ]
+          },
+          "blockingFor": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "verificationCommand": {
+            "type": "string",
+            "minLength": 1
+          },
+          "manualEvidence": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": ["gateType"],
+              "properties": {
+                "gateType": {
+                  "const": "deterministic"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "verificationCommand"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": ["gateType"],
+              "properties": {
+                "gateType": {
+                  "enum": [
+                    "native",
+                    "external",
+                    "owner"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "manualEvidence"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 2,
+  "verifiedAt": "2026-08-22",
+  "verificationStatus": "INCOMPLETE_OFFICIAL_COVERAGE",
+  "verificationGaps": [
+    "CHAT_PLAN_CAPS_NOT_ESTABLISHED",
+    "MCP_PLAN_MATRIX_NOT_ESTABLISHED",
+    "LEGACY_CREDIT_ESTIMATE_REPLACED"
+  ],
+  "absoluteConversionPublished": false,
+  "sources": {
+    "chatPricing": "https://learn.chatgpt.com/docs/pricing",
+    "gpt55Limits": "https://learn.chatgpt.com/docs/pricing",
+    "gpt56Limits": "https://learn.chatgpt.com/docs/pricing",
+    "codexPricing": "https://learn.chatgpt.com/docs/pricing",
+    "codexRateCard": "https://learn.chatgpt.com/docs/pricing",
+    "businessChatRateCard": "https://learn.chatgpt.com/docs/pricing",
+    "mcpAvailability": "https://developers.openai.com/plugins/deploy/connect-chatgpt"
+  },
+  "chat": {
+    "go": {
+      "instantMessages": 160,
+      "windowHours": 3,
+      "fallback": "mini"
+    },
+    "plus": {
+      "instantMessages": 160,
+      "windowHours": 3,
+      "fallback": "mini"
+    },
+    "pro5x": {
+      "multiplierVsPlus": 5,
+      "exactInstantCapPublished": false
+    },
+    "pro20x": {
+      "multiplierVsPlus": 20,
+      "exactInstantCapPublished": false
+    },
+    "business": {
+      "instant": "unlimited-subject-to-guardrails"
+    }
+  },
+  "codexLocalMessagesPer5h": {
+    "plus": {
+      "sol": [
+        10,
+        100
+      ],
+      "terra": [
+        25,
+        200
+      ],
+      "luna": [
+        250,
+        2000
+      ]
+    },
+    "pro5x": {
+      "sol": [
+        50,
+        500
+      ],
+      "terra": [
+        125,
+        1000
+      ],
+      "luna": [
+        1250,
+        10000
+      ]
+    },
+    "pro20x": {
+      "sol": [
+        200,
+        2000
+      ],
+      "terra": [
+        500,
+        4000
+      ],
+      "luna": [
+        5000,
+        40000
+      ]
+    },
+    "business": {
+      "sol": [
+        10,
+        100
+      ],
+      "terra": [
+        25,
+        200
+      ],
+      "luna": [
+        250,
+        2000
+      ]
+    }
+  },
+  "flexibleCredits": {
+    "gpt56AverageCreditsPerMessage": [
+      5,
+      30
+    ]
+  },
+  "mcpAvailability": {
+    "plus": "not-full-custom-mcp",
+    "pro": "read-fetch-only",
+    "business": "full-write-modify-beta",
+    "enterpriseEdu": "full-write-modify-beta"
+  }
+}

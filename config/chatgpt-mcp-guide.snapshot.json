@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-08-21",
+  "staleAfterDays": 30,
+  "verificationStatus": "OFFICIAL_DOCS_VERIFIED",
+  "source": "https://developers.openai.com/plugins/deploy/connect-chatgpt",
+  "productLabel": "Custom MCP App (current official UI may label it a Plugin)",
+  "developerModePath": ["Settings", "Security and login", "Developer mode"],
+  "connectionPage": "https://chatgpt.com/plugins",
+  "publicMcpPath": "/mcp",
+  "expectedToolCount": 27,
+  "availabilityDependsOnAccountOrWorkspacePolicy": true,
+  "businessWorkspaceRequired": false,
+  "writeValidationRequiredInChatGpt": false,
+  "truthfulStatuses": [
+    "MANUAL_PENDING",
+    "USER_CONFIRMED",
+    "VALIDATED",
+    "BLOCKED_BY_HOST_PLAN_OR_POLICY"
+  ],
+  "fallbackText": "查看当前官方教程；不得依据过期 UI 路径推断账号能力。"
+}

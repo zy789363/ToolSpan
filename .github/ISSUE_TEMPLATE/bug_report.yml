@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a reproducible ToolSpan defect using synthetic data
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include secrets, real configuration, private paths, account IDs, or user data. Report security vulnerabilities through the private process in SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: ToolSpan version or commit
+      description: Use a version or commit identifier; do not paste diagnostics containing private data.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Configuration or startup
+        - OAuth or MCP protocol
+        - Workspace or files
+        - Jobs or runners
+        - Artifacts
+        - Documentation or release checks
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Use synthetic paths and data. Include the exact safe commands run.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Redact secrets, config contents, private paths, and user data.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I used synthetic data and removed secrets and private identifiers.
+          required: true
+        - label: This is not a private security vulnerability report.
+          required: true

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://toolspan.dev/schemas/setup-state.v1.json",
+  "title": "ToolSpan Setup State v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "setupProtocolVersion", "updatedAt", "sessions"],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "setupProtocolVersion": { "const": "1" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "currentSessionId": { "$ref": "#/$defs/id" },
+    "sessions": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/id" },
+      "additionalProperties": { "$ref": "#/$defs/session" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 8, "maxLength": 128, "pattern": "^[A-Za-z0-9_-]+$" },
+    "status": {
+      "enum": [
+        "IDLE", "PREFLIGHT", "PLANNED", "WAITING_FOR_CONFIRMATION", "APPLYING",
+        "VERIFYING", "COMPLETE", "NEEDS_CREDENTIAL_REENTRY", "NEEDS_RECONCILIATION",
+        "ROLLING_BACK", "ROLLED_BACK", "ROLLBACK_PARTIAL"
+      ]
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$" },
+        "message": { "type": "string", "maxLength": 1024 },
+        "nameservers": { "type": "array", "items": { "type": "string", "maxLength": 253 } }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sessionId", "idempotencyKey", "target", "status", "requiresCredential", "createdAt", "updatedAt"],
+      "properties": {
+        "sessionId": { "$ref": "#/$defs/id" },
+        "idempotencyKey": { "$ref": "#/$defs/id" },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["zoneName"],
+          "properties": { "zoneName": { "type": "string", "minLength": 1, "maxLength": 253 } }
+        },
+        "status": { "$ref": "#/$defs/status" },
+        "plan": { "type": "object" },
+        "blocker": { "$ref": "#/$defs/blocker" },
+        "requiresCredential": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

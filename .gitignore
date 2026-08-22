@@ -1,0 +1,17 @@
+node_modules/
+dist/
+target/
+coverage/
+.env
+.env.*
+.webgpt/
+.toolspan-dev/
+config.local.json
+webgpt.config.json
+state/
+secrets/
+vendor-inputs/
+deploy/cloudflared/config.yml
+deploy/cloudflared/*.json
+deploy/cloudflared/*.pem
+*.log

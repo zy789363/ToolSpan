@@ -1,0 +1,2 @@
+- [ ] verify ToolSpan through a real MCP client transport
+- [ ] keep external Codex remote validation as a separate gate

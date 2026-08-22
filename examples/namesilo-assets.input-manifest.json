@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "inputArchive": "vendor-inputs/namesilo/marketing-assets.zip",
+  "optional": true,
+  "fallback": "text-only-vendor-card",
+  "selectedAssets": [
+    {
+      "target": "docs/assets/vendors/namesilo/logo-light.svg",
+      "source": "NameSilo Logos/NameSilo_Logo.svg",
+      "sha256": "c517a9c168c52b893fd0e1ad47e305a697adb3368899835b31af9b8bad4eb9d2"
+    },
+    {
+      "target": "docs/assets/vendors/namesilo/logo-dark.svg",
+      "source": "NameSilo Logos/NameSilo_Logo_DarkBG.svg",
+      "sha256": "270029370e2b8524d89ed237be605232abe783f41c6dd1d1cbbd737014a92d34"
+    },
+    {
+      "target": "docs/assets/vendors/namesilo/icon.svg",
+      "source": "NameSilo Logos/Logo_Icon - high res.svg",
+      "sha256": "8415ab9ceeb4450e0e23e84fbc0241fb17c048edc9244076dbc0ea2af1a0cfd3"
+    },
+    {
+      "target": "docs/assets/vendors/namesilo/affiliate-banner-468x60.png",
+      "source": "468x60_V1.png",
+      "sha256": "0e66df20a7ec7c337d0ec5613ee507ec6c2134397016863291fd5b10032e0c52"
+    }
+  ],
+  "prohibited": [
+    "font files",
+    "EPS files",
+    "unselected bulk marketing assets"
+  ]
+}

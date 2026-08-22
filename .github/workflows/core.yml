@@ -1,0 +1,181 @@
+{
+  "name": "Core CI",
+  "on": {
+    "push": {},
+    "pull_request": {},
+    "workflow_dispatch": {}
+  },
+  "permissions": {
+    "contents": "read"
+  },
+  "jobs": {
+    "core": {
+      "name": "Core / ${{ matrix.label }}",
+      "runs-on": "${{ matrix.os }}",
+      "timeout-minutes": 25,
+      "strategy": {
+        "fail-fast": false,
+        "matrix": {
+          "include": [
+            {
+              "label": "Ubuntu Node 22.17",
+              "os": "ubuntu-latest",
+              "node": "22.17.0"
+            },
+            {
+              "label": "Ubuntu Node 24",
+              "os": "ubuntu-latest",
+              "node": "24.x"
+            },
+            {
+              "label": "Windows Node 24",
+              "os": "windows-latest",
+              "node": "24.x"
+            }
+          ]
+        }
+      },
+      "steps": [
+        {
+          "name": "Checkout",
+          "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "with": {
+            "persist-credentials": false
+          }
+        },
+        {
+          "name": "Set up Node",
+          "uses": "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+          "with": {
+            "node-version": "${{ matrix.node }}",
+            "cache": "npm"
+          }
+        },
+        {
+          "name": "Clean install",
+          "run": "npm ci"
+        },
+        {
+          "name": "Verify Core",
+          "run": "npm run verify:core"
+        }
+      ]
+    },
+    "desktop-source": {
+      "name": "Desktop source / ${{ matrix.label }}",
+      "runs-on": "${{ matrix.os }}",
+      "timeout-minutes": 60,
+      "strategy": {
+        "fail-fast": false,
+        "matrix": {
+          "include": [
+            {
+              "label": "Ubuntu Node 24",
+              "os": "ubuntu-latest",
+              "node": "24.x"
+            },
+            {
+              "label": "Windows Node 24",
+              "os": "windows-latest",
+              "node": "24.x"
+            }
+          ]
+        }
+      },
+      "steps": [
+        {
+          "name": "Checkout",
+          "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "with": {
+            "persist-credentials": false
+          }
+        },
+        {
+          "name": "Set up Node",
+          "uses": "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+          "with": {
+            "node-version": "${{ matrix.node }}",
+            "cache": "npm",
+            "cache-dependency-path": "package-lock.json\napps/desktop/package-lock.json"
+          }
+        },
+        {
+          "name": "Install Ubuntu Tauri prerequisites",
+          "if": "runner.os == 'Linux'",
+          "run": "sudo apt-get update\nsudo apt-get install --no-install-recommends libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf"
+        },
+        {
+          "name": "Clean install Core",
+          "run": "npm ci"
+        },
+        {
+          "name": "Verify Desktop source",
+          "run": "npm run verify:desktop:source"
+        },
+        {
+          "name": "Attempt native Windows build when prerequisites exist",
+          "if": "runner.os == 'Windows'",
+          "shell": "pwsh",
+          "run": "npm run verify:desktop:windows\n$ToolSpanNativeExit = $LASTEXITCODE\nif ($ToolSpanNativeExit -eq 2) { Write-Host '::notice::Windows native build blocked by runner capabilities'; exit 0 }\nexit $ToolSpanNativeExit"
+        }
+      ]
+    },
+    "setup-source": {
+      "name": "Setup source / ${{ matrix.label }}",
+      "runs-on": "${{ matrix.os }}",
+      "timeout-minutes": 90,
+      "strategy": {
+        "fail-fast": false,
+        "matrix": {
+          "include": [
+            {
+              "label": "Ubuntu Node 24",
+              "os": "ubuntu-latest",
+              "node": "24.x"
+            },
+            {
+              "label": "Windows Node 24",
+              "os": "windows-latest",
+              "node": "24.x"
+            }
+          ]
+        }
+      },
+      "steps": [
+        {
+          "name": "Checkout",
+          "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "with": {
+            "persist-credentials": false
+          }
+        },
+        {
+          "name": "Set up Node",
+          "uses": "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+          "with": {
+            "node-version": "${{ matrix.node }}",
+            "cache": "npm",
+            "cache-dependency-path": "package-lock.json\napps/desktop/package-lock.json"
+          }
+        },
+        {
+          "name": "Install Ubuntu Tauri prerequisites",
+          "if": "runner.os == 'Linux'",
+          "run": "sudo apt-get update\nsudo apt-get install --no-install-recommends libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf"
+        },
+        {
+          "name": "Enable Rust verification components",
+          "run": "rustup component add rustfmt clippy"
+        },
+        {
+          "name": "Clean install Core",
+          "run": "npm ci"
+        },
+        {
+          "name": "Verify Setup source without external credentials",
+          "run": "npm run verify:setup"
+        }
+      ]
+    }
+  }
+}

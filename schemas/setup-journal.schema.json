@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://toolspan.dev/schemas/setup-journal.v1.json",
+  "title": "ToolSpan Setup Journal v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sessionId", "idempotencyKey", "entries"],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "sessionId": { "$ref": "#/$defs/id" },
+    "idempotencyKey": { "$ref": "#/$defs/id" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sequence", "at", "event"],
+        "properties": {
+          "sequence": { "type": "integer", "minimum": 1 },
+          "at": { "type": "string", "format": "date-time" },
+          "event": {
+            "enum": ["SESSION_CREATED", "STATE_TRANSITION", "PLAN_CREATED", "APPLY_ACTION", "APPLY_FAILED", "RECONCILED", "ROLLBACK_ACTION", "STALE_LOCK_RECOVERED"]
+          },
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "resource": { "$ref": "#/$defs/resource" },
+          "rollbackData": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "resourceId", "appliedFingerprint"],
+            "properties": {
+              "kind": { "enum": ["tunnel_config", "dns"] },
+              "resourceId": { "type": "string", "minLength": 1 },
+              "accountId": { "type": "string", "minLength": 1 },
+              "zoneId": { "type": "string", "minLength": 1 },
+              "previousTunnelConfig": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["ingress"],
+                "properties": {
+                  "ingress": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["service"],
+                      "properties": {
+                        "hostname": { "type": "string" },
+                        "service": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              },
+              "previousDnsRecord": {
+                "type": "object",
+                "required": ["id", "zoneId", "type", "name", "content", "proxied", "ttl"],
+                "properties": {
+                  "id": { "type": "string" },
+                  "zoneId": { "type": "string" },
+                  "type": { "const": "CNAME" },
+                  "name": { "type": "string" },
+                  "content": { "type": "string" },
+                  "proxied": { "type": "boolean" },
+                  "ttl": { "type": "integer", "minimum": 1 },
+                  "ownedByToolSpan": { "type": "boolean" },
+                  "ownershipKey": { "type": "string" }
+                }
+              },
+              "appliedFingerprint": { "$ref": "#/$defs/fingerprint" }
+            }
+          },
+          "detail": { "type": "string", "maxLength": 2048 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 8, "maxLength": 128, "pattern": "^[A-Za-z0-9_-]+$" },
+    "resource": {
+      "type": "object",
+      "required": ["kind", "classification", "resourceId", "name", "desiredFingerprint", "ownedBySession"],
+      "properties": {
+        "kind": { "type": "string" },
+        "classification": { "enum": ["created", "reused", "updated", "untouched"] },
+        "resourceId": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "beforeFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "desiredFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "reason": { "type": "string" },
+        "ownedBySession": { "type": "boolean" },
+        "afterFingerprint": { "$ref": "#/$defs/fingerprint" }
+      }
+    },
+    "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

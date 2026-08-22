@@ -1,0 +1,33 @@
+{
+  "goalVersion": "4.0",
+  "currentStage": "PRECHECK",
+  "stages": {
+    "core": {
+      "status": "NOT_STARTED",
+      "passedRequirements": [],
+      "failedRequirements": [],
+      "verificationReport": null
+    },
+    "desktop": {
+      "status": "NOT_STARTED",
+      "passedRequirements": [],
+      "failedRequirements": [],
+      "verificationReport": null
+    },
+    "setup": {
+      "status": "NOT_STARTED",
+      "passedRequirements": [],
+      "failedRequirements": [],
+      "verificationReport": null
+    },
+    "release": {
+      "status": "NOT_STARTED",
+      "passedRequirements": [],
+      "failedRequirements": [],
+      "verificationReport": null
+    }
+  },
+  "environment": {},
+  "blockers": [],
+  "lastUpdated": "2026-08-20T00:00:00Z"
+}

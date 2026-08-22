@@ -1,0 +1,522 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://toolspan.local/schemas/cloudflare-e2e-evidence.schema.json",
+  "title": "ToolSpan Cloudflare API E2E sanitized evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "evidenceType",
+    "generatedAt",
+    "sessionId",
+    "scopeClaim",
+    "mode",
+    "readOnly",
+    "target",
+    "status",
+    "decision",
+    "reason",
+    "credentialType",
+    "credentialVerified",
+    "zone",
+    "dnsInspection",
+    "tunnelInspection",
+    "dryRun",
+    "apply",
+    "secondRun",
+    "cleanup",
+    "apiRequests",
+    "failure",
+    "secretScan"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "evidenceType": { "const": "TOOLSPAN_CLOUDFLARE_API_E2E" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "sessionId": { "type": "string", "pattern": "^[0-9]{8}-[a-f0-9]{10}$" },
+    "scopeClaim": { "const": "API_RESOURCE_LIFECYCLE_ONLY" },
+    "mode": { "enum": ["PREFLIGHT", "APPLY", "RECONCILE"] },
+    "readOnly": { "type": "boolean" },
+    "target": { "$ref": "#/$defs/target" },
+    "status": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "BLOCKED_BY_ENVIRONMENT",
+        "BLOCKED_BY_EXTERNAL_ACCOUNT",
+        "NEEDS_HUMAN_CHECKPOINT"
+      ]
+    },
+    "decision": {
+      "enum": ["STOP", "DRY_RUN_READY", "RECONCILE_REQUIRED", "APPLY_COMPLETE", "CLEANUP_COMPLETE"]
+    },
+    "reason": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
+    "credentialType": { "enum": ["SCOPED_API_TOKEN", "GLOBAL_API_KEY", "UNKNOWN"] },
+    "credentialVerified": { "type": "boolean" },
+    "zone": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/zone" }
+      ]
+    },
+    "reconcileZone": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/zone" }
+      ]
+    },
+    "dnsInspection": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/dnsInspection" }
+      ]
+    },
+    "reconcileDnsInspection": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/dnsInspection" }
+      ]
+    },
+    "tunnelInspection": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/tunnelInspection" }
+      ]
+    },
+    "reconcileTunnelInspection": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/tunnelInspection" }
+      ]
+    },
+    "dryRun": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/dryRun" }
+      ]
+    },
+    "apply": { "$ref": "#/$defs/apply" },
+    "secondRun": { "$ref": "#/$defs/secondRun" },
+    "cleanup": { "$ref": "#/$defs/cleanup" },
+    "apiRequests": {
+      "type": "array",
+      "maxItems": 200,
+      "items": { "$ref": "#/$defs/apiRequest" }
+    },
+    "failure": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/failure" }
+      ]
+    },
+    "secretScan": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/secretScan" }
+      ]
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{8,128}$"
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zoneName", "preferredHostname", "hostname", "hostnameSelection", "tunnelPrefix", "localService"],
+      "properties": {
+        "zoneName": { "const": "aiqushi.top" },
+        "preferredHostname": { "const": "mcp.aiqushi.top" },
+        "hostname": { "type": "string", "pattern": "^(?:mcp|mcp-e2e-[a-z0-9-]+)\\.aiqushi\\.top$" },
+        "hostnameSelection": { "enum": ["PREFERRED", "SESSION_FALLBACK"] },
+        "tunnelPrefix": { "const": "toolspan-e2e-" },
+        "localService": { "const": "http://127.0.0.1:8787" }
+      }
+    },
+    "zone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "accountId", "status", "assignedNameservers"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "accountId": { "$ref": "#/$defs/id" },
+        "status": { "enum": ["ACTIVE", "PENDING", "INITIALIZING", "MOVED", "DEACTIVATED", "UNKNOWN"] },
+        "assignedNameservers": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+\\.ns\\.cloudflare\\.com$"
+          }
+        }
+      }
+    },
+    "dnsRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "ownership"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["A", "AAAA", "CNAME", "TXT", "OTHER"] },
+        "ownership": { "enum": ["CURRENT_SESSION", "UNKNOWN"] }
+      }
+    },
+    "dnsInspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hostname", "recordCount", "unknownCount", "collision", "records", "truncated"],
+      "properties": {
+        "hostname": { "type": "string", "pattern": "^(?:mcp|mcp-e2e-[a-z0-9-]+)\\.aiqushi\\.top$" },
+        "recordCount": { "type": "integer", "minimum": 0 },
+        "unknownCount": { "type": "integer", "minimum": 0 },
+        "collision": { "type": "boolean" },
+        "records": { "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/dnsRecord" } },
+        "truncated": { "type": "boolean" }
+      }
+    },
+    "tunnelRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "status", "desired", "ownership"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "pattern": "^toolspan-e2e-[a-z0-9-]{1,80}$" },
+        "status": { "enum": ["HEALTHY", "DEGRADED", "DOWN", "INACTIVE", "UNKNOWN"] },
+        "desired": { "type": "boolean" },
+        "ownership": { "enum": ["CURRENT_SESSION", "UNKNOWN_UNTOUCHED"] }
+      }
+    },
+    "tunnelInspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prefix",
+        "desiredName",
+        "prefixedCount",
+        "unknownCount",
+        "desiredCollision",
+        "records",
+        "truncated"
+      ],
+      "properties": {
+        "prefix": { "const": "toolspan-e2e-" },
+        "desiredName": { "type": "string", "pattern": "^toolspan-e2e-[a-z0-9-]{1,80}$" },
+        "prefixedCount": { "type": "integer", "minimum": 0 },
+        "unknownCount": { "type": "integer", "minimum": 0 },
+        "desiredCollision": { "type": "boolean" },
+        "records": { "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/tunnelRecord" } },
+        "truncated": { "type": "boolean" }
+      }
+    },
+    "plannedChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order", "action", "resource", "target", "ownership"],
+      "properties": {
+        "order": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "action": { "enum": ["CREATE", "CONFIGURE"] },
+        "resource": { "enum": ["TUNNEL", "TUNNEL_INGRESS", "DNS_CNAME"] },
+        "target": { "type": "string", "pattern": "^(?:mcp(?:-e2e-[a-z0-9-]+)?\\.aiqushi\\.top|toolspan-e2e-[a-z0-9-]{1,80})$" },
+        "ownership": { "enum": ["NEW_SESSION_ONLY", "CURRENT_SESSION_ONLY"] }
+      }
+    },
+    "dryRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executable",
+        "planHash",
+        "zoneId",
+        "accountId",
+        "inspectionFingerprint",
+        "mutationPayloads",
+        "mutationCount",
+        "createCount",
+        "blockers",
+        "unknownResourcesUntouched",
+        "changes"
+      ],
+      "properties": {
+        "executable": { "type": "boolean" },
+        "planHash": { "$ref": "#/$defs/fingerprint" },
+        "zoneId": { "type": ["string", "null"], "pattern": "^[A-Za-z0-9_-]{8,128}$" },
+        "accountId": { "type": ["string", "null"], "pattern": "^[A-Za-z0-9_-]{8,128}$" },
+        "inspectionFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "mutationPayloads": { "$ref": "#/$defs/mutationPayloads" },
+        "mutationCount": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "createCount": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "blockers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "ZONE_NOT_FOUND",
+              "ZONE_NOT_ACTIVE",
+              "UNKNOWN_DNS_COLLISION",
+              "UNKNOWN_DESIRED_TUNNEL_COLLISION"
+            ]
+          }
+        },
+        "unknownResourcesUntouched": { "const": true },
+        "changes": { "type": "array", "maxItems": 3, "items": { "$ref": "#/$defs/plannedChange" } }
+      }
+    },
+    "mutationPayloads": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tunnel", "ingress", "dns"],
+      "properties": {
+        "tunnel": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "configSrc"],
+          "properties": {
+            "name": { "type": "string", "pattern": "^toolspan-e2e-[a-z0-9-]{1,80}$" },
+            "configSrc": { "const": "cloudflare" }
+          }
+        },
+        "ingress": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ingress"],
+          "properties": {
+            "ingress": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["hostname", "service"],
+                  "properties": {
+                    "hostname": { "type": "string", "pattern": "^(?:mcp|mcp-e2e-[a-z0-9-]+)\\.aiqushi\\.top$" },
+                    "service": { "const": "http://127.0.0.1:8787" }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["service"],
+                  "properties": {
+                    "service": { "const": "http_status:404" }
+                  }
+                }
+              ],
+              "items": false
+            }
+          }
+        },
+        "dns": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "name", "contentSource", "contentSuffix", "proxied", "ttl"],
+          "properties": {
+            "type": { "const": "CNAME" },
+            "name": { "type": "string", "pattern": "^(?:mcp|mcp-e2e-[a-z0-9-]+)\\.aiqushi\\.top$" },
+            "contentSource": { "const": "CREATED_TUNNEL_ID" },
+            "contentSuffix": { "const": ".cfargotunnel.com" },
+            "proxied": { "const": true },
+            "ttl": { "const": 1 }
+          }
+        }
+      }
+    },
+    "confirmationStatus": {
+      "enum": ["NOT_REQUESTED", "REQUIRED", "CONSUMED"]
+    },
+    "appliedChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "resource", "id"],
+      "properties": {
+        "action": { "enum": ["CREATED", "CONFIGURED"] },
+        "resource": { "enum": ["TUNNEL", "TUNNEL_INGRESS", "DNS_CNAME"] },
+        "id": { "$ref": "#/$defs/id" }
+      }
+    },
+    "ownedResource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "fingerprint"],
+      "properties": {
+        "kind": { "enum": ["TUNNEL", "DNS_CNAME"] },
+        "id": { "$ref": "#/$defs/id" },
+        "fingerprint": { "$ref": "#/$defs/fingerprint" }
+      }
+    },
+    "apply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempted",
+        "confirmationStatus",
+        "confirmationHash",
+        "status",
+        "checkpoint",
+        "changes",
+        "ownedResources"
+      ],
+      "properties": {
+        "attempted": { "type": "boolean" },
+        "confirmationStatus": { "$ref": "#/$defs/confirmationStatus" },
+        "confirmationHash": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/fingerprint" }
+          ]
+        },
+        "status": {
+          "enum": ["NOT_REQUESTED", "IN_PROGRESS", "APPLIED", "PARTIAL_STOPPED", "OUTCOME_UNKNOWN"]
+        },
+        "checkpoint": {
+          "enum": [
+            "NOT_STARTED",
+            "BEFORE_TUNNEL_CREATE",
+            "AFTER_TUNNEL_CREATE",
+            "BEFORE_INGRESS_CONFIGURE",
+            "AFTER_INGRESS_CONFIGURE",
+            "BEFORE_DNS_CREATE",
+            "AFTER_DNS_CREATE",
+            "COMPLETE",
+            "OUTCOME_UNKNOWN"
+          ]
+        },
+        "changes": { "type": "array", "maxItems": 3, "items": { "$ref": "#/$defs/appliedChange" } },
+        "ownedResources": { "type": "array", "maxItems": 2, "items": { "$ref": "#/$defs/ownedResource" } }
+      }
+    },
+    "secondRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempted",
+        "status",
+        "duplicateCreates",
+        "ownedTunnelMatched",
+        "ownedDnsMatched",
+        "ingressMatched",
+        "mutationDelta"
+      ],
+      "properties": {
+        "attempted": { "type": "boolean" },
+        "status": { "enum": ["NOT_REQUESTED", "PASS", "FAIL"] },
+        "duplicateCreates": { "type": ["integer", "null"], "minimum": 0 },
+        "ownedTunnelMatched": { "type": ["boolean", "null"] },
+        "ownedDnsMatched": { "type": ["boolean", "null"] },
+        "ingressMatched": { "type": ["boolean", "null"] },
+        "mutationDelta": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "deletedResource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "enum": ["TUNNEL", "DNS_CNAME"] },
+        "id": { "$ref": "#/$defs/id" }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempted",
+        "confirmationStatus",
+        "confirmationHash",
+        "status",
+        "checkpoint",
+        "deletedResources"
+      ],
+      "properties": {
+        "attempted": { "type": "boolean" },
+        "confirmationStatus": { "$ref": "#/$defs/confirmationStatus" },
+        "confirmationHash": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/fingerprint" }
+          ]
+        },
+        "status": {
+          "enum": ["NOT_REQUESTED", "IN_PROGRESS", "PASS", "FAIL", "STOPPED", "OUTCOME_UNKNOWN"]
+        },
+        "checkpoint": {
+          "enum": [
+            "NOT_STARTED",
+            "BEFORE_DNS_DELETE",
+            "AFTER_DNS_DELETE",
+            "BEFORE_TUNNEL_DELETE",
+            "AFTER_TUNNEL_DELETE",
+            "COMPLETE",
+            "OUTCOME_UNKNOWN"
+          ]
+        },
+        "deletedResources": { "type": "array", "maxItems": 2, "items": { "$ref": "#/$defs/deletedResource" } }
+      }
+    },
+    "apiRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "method", "attempt", "status", "outcome"],
+      "properties": {
+        "operation": {
+          "enum": [
+            "VERIFY_SCOPED_TOKEN",
+            "VERIFY_GLOBAL_KEY",
+            "RESOLVE_ZONE",
+            "INSPECT_DNS",
+            "INSPECT_TUNNELS",
+            "CREATE_OWNED_TUNNEL",
+            "VERIFY_OWNED_TUNNEL_CONFIG",
+            "CONFIGURE_OWNED_TUNNEL",
+            "CREATE_OWNED_DNS",
+            "DELETE_OWNED_DNS",
+            "DELETE_OWNED_TUNNEL"
+          ]
+        },
+        "method": { "enum": ["GET", "POST", "PUT", "DELETE"] },
+        "attempt": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "status": { "type": ["integer", "null"], "minimum": 100, "maximum": 599 },
+        "outcome": { "enum": ["SUCCESS", "REJECTED", "NETWORK_ERROR", "INVALID_RESPONSE"] }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "code", "httpStatus", "cloudflareErrorCodes"],
+      "properties": {
+        "classification": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "BLOCKED_BY_ENVIRONMENT",
+            "BLOCKED_BY_EXTERNAL_ACCOUNT",
+            "NEEDS_HUMAN_CHECKPOINT"
+          ]
+        },
+        "code": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
+        "httpStatus": { "type": ["integer", "null"], "minimum": 100, "maximum": 599 },
+        "cloudflareErrorCodes": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "type": "integer" }
+        }
+      }
+    },
+    "secretScan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "forbiddenFieldCount", "matchedSecretValues"],
+      "properties": {
+        "status": { "const": "PASS" },
+        "forbiddenFieldCount": { "const": 0 },
+        "matchedSecretValues": { "const": 0 }
+      }
+    }
+  }
+}
