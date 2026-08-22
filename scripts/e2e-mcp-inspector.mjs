@@ -765,8 +765,8 @@ function spawnServer(entry, cwd, configPath) {
   return { child, logScanner };
 }
 
-async function waitForHealth(server, origin) {
-  for (let attempt = 0; attempt < 150; attempt += 1) {
+async function waitForHealth(server, origin, attempts = 150) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (server.child.exitCode !== null) {
       throw new Error(`Packed ToolSpan exited before health check (exit ${String(server.child.exitCode)})`);
     }
@@ -987,11 +987,22 @@ async function installPackedRuntime(temporaryRoot) {
 export async function runPackedProtocolE2e({
   command = "npm run e2e:mcp-inspector",
   evidenceFileName = "release-e-host-01.json",
+  publicOrigin: requestedPublicOrigin,
+  fixedPort,
+  writeExternalHostEvidence: persistExternalHostEvidence = true,
 } = {}) {
   assert(
-    command === "npm run e2e:mcp-inspector" || command === "npm run e2e:host:local",
+    ["npm run e2e:mcp-inspector", "npm run e2e:host:local", "npm run e2e:cloudflare-public"].includes(command),
     "Unsupported release E2E command label",
   );
+  const publicOrigin = requestedPublicOrigin === undefined ? undefined : new URL(requestedPublicOrigin).origin;
+  if (publicOrigin !== undefined) {
+    assert(requestedPublicOrigin === "https://mcp.aiqushi.top", "PUBLIC_E2E_ORIGIN_NOT_FIXED");
+    assert(publicOrigin === requestedPublicOrigin, "PUBLIC_E2E_ORIGIN_NOT_CLEAN");
+    assert(fixedPort === 8787, "PUBLIC_E2E_PORT_NOT_FIXED");
+  } else {
+    assert(fixedPort === undefined, "FIXED_PORT_REQUIRES_PUBLIC_E2E");
+  }
   const fixtureRoot = await realpath(path.join(repositoryRoot, ...FIXTURE_RELATIVE_PATH.split("/")));
   const canonicalRepository = await realpath(repositoryRoot);
   assert(
@@ -1038,8 +1049,9 @@ export async function runPackedProtocolE2e({
     assert(/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/u.test(persistedHash), "Password initializer did not persist bcrypt");
     assert(await compare(password, persistedHash), "Persisted bcrypt hash does not match stdin password");
 
-    const port = await choosePort();
-    const origin = `http://127.0.0.1:${String(port)}`;
+    const port = fixedPort ?? await choosePort();
+    const localOrigin = `http://127.0.0.1:${String(port)}`;
+    const origin = publicOrigin ?? localOrigin;
     const configPath = path.join(temporaryRoot, "toolspan.synthetic.json");
     await writeFile(configPath, `${JSON.stringify({
       instanceName: INSTANCE_NAME,
@@ -1052,7 +1064,8 @@ export async function runPackedProtocolE2e({
     }, null, 2)}\n`, "utf8");
 
     server = spawnServer(path.join(installedRoot, "dist", "main.js"), installedRoot, configPath);
-    await waitForHealth(server, origin);
+    await waitForHealth(server, localOrigin);
+    if (origin !== localOrigin) await waitForHealth(server, origin, 600);
     const inspectorSmoke = await runOfficialInspectorAuthSmoke(origin, temporaryRoot);
     const protectedMetadata = await fetchJson(`${origin}/.well-known/oauth-protected-resource`, {}, 200);
     const authorizationMetadata = await fetchJson(`${origin}/.well-known/oauth-authorization-server`, {}, 200);
@@ -1242,8 +1255,8 @@ export async function runPackedProtocolE2e({
       },
       syntheticConfig: {
         instanceName: INSTANCE_NAME,
-        bind: "127.0.0.1:ephemeral",
-        publicBaseUrl: "loopback-http-ephemeral",
+        bind: fixedPort === undefined ? "127.0.0.1:ephemeral" : `127.0.0.1:${String(fixedPort)}`,
+        publicBaseUrl: publicOrigin ?? "loopback-http-ephemeral",
         allowedRoot: FIXTURE_RELATIVE_PATH,
         stateLocation: "isolated-temporary-directory",
         ownerCredentialPersistence: "bcrypt-hash-only",
@@ -1252,6 +1265,9 @@ export async function runPackedProtocolE2e({
       },
       checks: [
         { id: "packed-install", status: "PASS", detail: "npm pack tarball installed into an isolated host directory" },
+        ...(publicOrigin === undefined ? [] : [
+          { id: "public-health", status: "PASS", detail: "fixed aiqushi.top HTTPS origin reached the packed loopback runtime" },
+        ]),
         { id: "official-inspector-auth-boundary", status: "PASS", detail: "latest v2 CLI returned auth_required with exit code 3 and wrote no auth store" },
         { id: "official-inspector-oauth", status: "PASS", detail: "authorization-code PKCE completed through a loopback callback" },
         { id: "official-inspector-initialize", status: "PASS" },
@@ -1348,17 +1364,18 @@ export async function runPackedProtocolE2e({
   successfulEvidence.secretSafety.inspectorOauthStateRemoved = true;
   successfulEvidence.checks.push({ id: "inspector-oauth-state-removed", status: "PASS" });
   const evidencePath = await writeEvidence(evidenceFileName, successfulEvidence, secretValues);
-  const externalEvidencePath = await writeExternalHostEvidence(
-    successfulEvidence.generatedAt,
-    inspectorProof,
-    secretValues,
-  );
+  const externalEvidencePath = persistExternalHostEvidence
+    ? await writeExternalHostEvidence(successfulEvidence.generatedAt, inspectorProof, secretValues)
+    : null;
   return {
     status: "SMOKE_PASS",
     evidence: evidencePath,
     externalEvidence: externalEvidencePath,
     toolCount: EXPECTED_TOOLS.length,
     protocolVersion: PROTOCOL_VERSION,
+    publicOrigin: publicOrigin ?? null,
+    publicHealthPassed: true,
+    oauthDiscoveryPassed: true,
     hostGate: "PASS",
     codexRemoteGate: "EXTERNAL_GATE_PENDING",
   };

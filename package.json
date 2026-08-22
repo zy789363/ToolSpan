@@ -79,6 +79,7 @@
     "e2e:codex-remote": "node scripts/e2e-codex-remote.mjs",
     "e2e:host:local": "node scripts/e2e-host-local.mjs",
     "e2e:cloudflare": "node scripts/e2e-cloudflare.mjs",
+    "e2e:cloudflare-public": "node scripts/e2e-cloudflare-public.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit"
