@@ -91,6 +91,13 @@ function createCloudflareMock(options = {}) {
     mutations: [],
     globalUserEmail: options.globalUserEmail ?? null,
   };
+  const responseConfig = () => {
+    const config = structuredClone(state.config);
+    if (typeof options.warpRoutingEnabled === "boolean") {
+      config["warp-routing"] = { enabled: options.warpRoutingEnabled };
+    }
+    return config;
+  };
   const fetch = async (input, init = {}) => {
     const url = new URL(input);
     const method = init.method ?? "GET";
@@ -139,10 +146,10 @@ function createCloudflareMock(options = {}) {
           },
         });
       }
-      return envelope({ config: state.config });
+      return envelope({ config: responseConfig() });
     }
     if (method === "GET" && new RegExp(`^/accounts/${ACCOUNT_ID}/cfd_tunnel/[^/]+/configurations$`, "u").test(apiPath)) {
-      return envelope({ config: state.config });
+      return envelope({ config: responseConfig() });
     }
     if (method === "POST" && apiPath === `/zones/${ZONE_ID}/dns_records`) {
       await options.beforeMutation?.({ resource: "DNS_CNAME", method });
@@ -888,6 +895,52 @@ test("Cloudflare object key ordering does not change exact config semantics", as
     }));
     assert.equal(result.evidence.reason, "SECOND_INVOCATION_REQUIRED");
     assert.equal(result.evidence.apply.status, "APPLIED");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("Cloudflare disabled server-managed warp routing preserves exact ingress semantics", async () => {
+  const { environment } = scopedEnvironment();
+  const mock = createCloudflareMock({ warpRoutingEnabled: false });
+  const directory = await mkdtemp(path.join(os.tmpdir(), "toolspan-cf-warp-disabled-"));
+  try {
+    const result = await runCloudflareE2E(fixedRunOptions({
+      manifest: manifest("SCOPED_API_TOKEN"),
+      environment,
+      fetch: mock.fetch,
+      mode: "APPLY",
+      enableApply: true,
+      writeEvidence: true,
+      evidenceDirectory: directory,
+      confirmationChannel: async ({ expected }) => expected,
+    }));
+    assert.equal(result.evidence.reason, "SECOND_INVOCATION_REQUIRED");
+    assert.equal(result.evidence.apply.status, "APPLIED");
+    assert.deepEqual(mock.state.mutations.map((item) => item.resource), ["TUNNEL", "TUNNEL_CONFIG", "DNS_CNAME"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("Cloudflare enabled warp routing is not accepted as the exact ingress config", async () => {
+  const { environment } = scopedEnvironment();
+  const mock = createCloudflareMock({ warpRoutingEnabled: true });
+  const directory = await mkdtemp(path.join(os.tmpdir(), "toolspan-cf-warp-enabled-"));
+  try {
+    const result = await runCloudflareE2E(fixedRunOptions({
+      manifest: manifest("SCOPED_API_TOKEN"),
+      environment,
+      fetch: mock.fetch,
+      mode: "APPLY",
+      enableApply: true,
+      writeEvidence: true,
+      evidenceDirectory: directory,
+      confirmationChannel: async ({ expected }) => expected,
+    }));
+    assert.equal(result.evidence.reason, "OUTCOME_UNKNOWN");
+    assert.equal(result.evidence.apply.status, "OUTCOME_UNKNOWN");
+    assert.equal(mock.state.calls.some((call) => call.method === "POST" && call.url.pathname.endsWith("/dns_records")), false);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

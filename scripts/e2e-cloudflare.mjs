@@ -656,6 +656,23 @@ function configsEqual(left, right) {
   return JSON.stringify(canonicalJsonValue(left)) === JSON.stringify(canonicalJsonValue(right));
 }
 
+function tunnelConfigsEqual(actual, expected) {
+  if (actual === null || typeof actual !== "object" || Array.isArray(actual)
+    || expected === null || typeof expected !== "object" || Array.isArray(expected)
+    || !Array.isArray(actual.ingress) || !Array.isArray(expected.ingress)
+    || Object.keys(expected).length !== 1 || !Object.hasOwn(expected, "ingress")) return false;
+  const actualKeys = Object.keys(actual).sort();
+  if (!configsEqual(actualKeys, ["ingress"])
+    && !configsEqual(actualKeys, ["ingress", "warp-routing"])) return false;
+  if (Object.hasOwn(actual, "warp-routing")) {
+    const warpRouting = actual["warp-routing"];
+    if (warpRouting === null || typeof warpRouting !== "object" || Array.isArray(warpRouting)
+      || !configsEqual(Object.keys(warpRouting).sort(), ["enabled"])
+      || warpRouting.enabled !== false) return false;
+  }
+  return configsEqual(actual.ingress, expected.ingress);
+}
+
 function ownedTunnelSemanticsMatch(tunnel, desiredTunnelName) {
   return tunnel !== undefined
     && tunnel.desired === true
@@ -1474,7 +1491,7 @@ export async function runCloudflareE2E(input = {}) {
           : await client.readTunnelConfig(inspection.zone.accountId, partialTunnel.id);
         evidence.secondRun.ingressMatched = partialTunnel === undefined
           ? false
-          : configsEqual(partialConfig, expectedIngress(actualHostname));
+          : tunnelConfigsEqual(partialConfig, expectedIngress(actualHostname));
         evidence.secondRun.duplicateCreates = null;
         evidence.secondRun.status = "FAIL";
         evidence.secondRun.mutationDelta = requestLog.filter((entry) => entry.method !== "GET").length;
@@ -1509,7 +1526,7 @@ export async function runCloudflareE2E(input = {}) {
       evidence.secondRun.duplicateCreates = secondPlan.createCount;
       evidence.secondRun.ownedTunnelMatched = tunnel !== undefined;
       evidence.secondRun.ownedDnsMatched = dns !== undefined;
-      evidence.secondRun.ingressMatched = configsEqual(config, ingress);
+      evidence.secondRun.ingressMatched = tunnelConfigsEqual(config, ingress);
       evidence.secondRun.mutationDelta = requestLog.filter((entry) => entry.method !== "GET").length;
       const ownedSemanticsMatched = ownedResourceSemanticsMatch({
         tunnel,
@@ -1595,7 +1612,7 @@ export async function runCloudflareE2E(input = {}) {
         throw new RunnerFault("OWNED_RESOURCE_FINGERPRINT_CHANGED", "NEEDS_HUMAN_CHECKPOINT");
       }
       const cleanupConfig = await client.readTunnelConfig(cleanupInspection.zone.accountId, ownedTunnel.id);
-      if (!configsEqual(cleanupConfig, ingress)) {
+      if (!tunnelConfigsEqual(cleanupConfig, ingress)) {
         throw new RunnerFault("OWNED_INGRESS_FINGERPRINT_CHANGED", "NEEDS_HUMAN_CHECKPOINT");
       }
       evidence.readOnly = false;
@@ -1626,7 +1643,7 @@ export async function runCloudflareE2E(input = {}) {
         tunnelDeleteInspection.zone.accountId,
         tunnelBeforeDelete.id,
       );
-      if (!configsEqual(tunnelConfigBeforeDelete, ingress)) {
+      if (!tunnelConfigsEqual(tunnelConfigBeforeDelete, ingress)) {
         throw new RunnerFault("OWNED_INGRESS_FINGERPRINT_CHANGED", "NEEDS_HUMAN_CHECKPOINT");
       }
       evidence.cleanup.checkpoint = "BEFORE_TUNNEL_DELETE";
@@ -1748,7 +1765,7 @@ export async function runCloudflareE2E(input = {}) {
     evidence.apply.checkpoint = "BEFORE_INGRESS_CONFIGURE";
     await persistMutationCheckpoint(evidence, sensitiveValues, options);
     const appliedConfig = await client.updateTunnelConfig(accountId, tunnel.id, ingress);
-    if (!configsEqual(appliedConfig, ingress)) {
+    if (!tunnelConfigsEqual(appliedConfig, ingress)) {
       throw new RunnerFault("TUNNEL_CONFIG_RESPONSE_MISMATCH", "NEEDS_HUMAN_CHECKPOINT", {
         outcomeUnknown: true,
       });
