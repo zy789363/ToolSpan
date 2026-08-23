@@ -13,6 +13,26 @@ if (-not $Principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Adm
     throw "Run this script from an elevated PowerShell session"
 }
 
+function Write-CloudflaredOwnership([string]$ServiceName, [string]$CloudflaredSource, [string]$Config) {
+    $rand = -join ((48..57) + (97..102) | Get-Random -Count 10 | ForEach-Object { [char]$_ })
+    $sessionId = "$(Get-Date -Format yyyyMMdd)-$rand"
+    $directory = Join-Path (Get-Location) ".toolspan-dev"
+    if (-not (Test-Path -LiteralPath $directory)) {
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    }
+    $ownership = @{
+        sessionId = $sessionId
+        installedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+        serviceName = $ServiceName
+        cloudflaredPath = $CloudflaredSource
+        configPath = $Config
+    }
+    $path = Join-Path $directory "cloudflared-service-ownership.json"
+    ($ownership | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath "$path.tmp" -Encoding UTF8
+    Move-Item -LiteralPath "$path.tmp" -Destination $path -Force
+    return $sessionId
+}
+
 $Executable = (Get-Command $CloudflaredPath -ErrorAction Stop).Source
 $ResolvedConfig = (Resolve-Path $ConfigPath).Path
 & $Executable --config $ResolvedConfig tunnel ingress validate
@@ -34,4 +54,5 @@ Set-ItemProperty `
     -Value $ImagePath
 Set-Service -Name "cloudflared" -StartupType Automatic
 Restart-Service -Name "cloudflared"
-Write-Host "Installed and started the cloudflared service."
+$SessionId = Write-CloudflaredOwnership "cloudflared" $Executable $ResolvedConfig
+Write-Host "Installed and started the cloudflared service (session $SessionId)."

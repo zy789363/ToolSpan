@@ -79,6 +79,7 @@ export async function verifyAllSource(options = {}) {
       "--test",
       "scripts/tests/release-scripts.test.mjs",
       "scripts/tests/package-runtime-policy.test.mjs",
+      "scripts/tests/cloudflared-service-lifecycle.test.mjs",
     ],
     { environment },
   ));
