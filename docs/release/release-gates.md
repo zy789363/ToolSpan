@@ -384,3 +384,17 @@ Remaining（不阻塞 `RELEASE_READY`）：
 
 至此 v0.6.0 正式发布闭环完成：源码迁移 + 测试全绿 + 安装包实装验证 + tag + GitHub Release。
 - 环境备注：发布过程中 github.com:443 数次断连（api.github.com 正常），push 重试 5 次成功；tag 先本地创建后随网络恢复推送。
+
+---
+
+## 2026-08-23 · v0.7.0 移除 Global API Key + 重新发布
+
+背景：按 Owner 决策彻底移除 Global API Key（legacy）路径，随后升版 0.7.0 并重新发布（breaking change）。
+
+1. **移除范围（6 层）**：Core `CloudflareCredential` 收敛为单一 `api_token`（fetch adapter/desktop-host/redaction/setup-service 删 global 分支）；Rust `setup.rs`/`protocol.rs` 删 `GlobalApiKey` 变体；协议与 config/test-environment schema 删 global 字段；前端 Setup Center 三路径（删 Global 卡/确认短语/二次 Apply 确认，i18n -13 key×2）；测试删 global 用例（setup-engine×2、setup-cloudflare×2、setup-page×1、cloudflare-e2e×3）；脚本层 10+ 处（check-desktop-security/check-commercial-links/check-setup-security/check-test-environment/e2e-cloudflare/verify-setup/verify-release/gate 矩阵等）。
+2. **需求与文档**：`goal/requirements.json` 删 `S-CF-GLOBAL-01`+`E-CF-GLOBAL-01`（72→70）；goal-state 删 `optionalLegacyGlobalKeyApplyPending` 与 passedRequirements 条目；删除 `docs/setup/cloudflare-global-key.md`；index/zone-onboarding/runtime-credential/prompts/release-gates/setup-gates/cloudflare-e2e 与根 goal 文档（00/02/03/04）同步清理。
+3. **版本 0.7.0 连锁**：8 版本文件 + 运行时正则（setup-service ^0.7.）+ 3 schema pattern + fixtures/docs 同步；`verify:desktop:source` 16 项 PASS、`verify:setup` 22 项 PASS、`verify:release` PASS（dry-run 82 files、SBOM 764、releaseReady=true）。
+4. **E-WIN-01 实装 smoke（0.7.0 新 hash：MSI `0275a933…`、NSIS `d5af3705…`）**：卸载 0.6.0 → 装 0.7.0 → 启动/WebView2 0.7.0/Desktop Host → Owner 托盘确认 → 干净退出。证据 `.toolspan-dev/evidence/windows-native-smoke-20260823T170535Z.json`；`E-WIN-01.json` 更新（observedAt 17:05:35Z）。
+5. **正式 tag + Release**：`git tag v0.7.0`（→`ce4d7d2`）已推送；`gh release create v0.7.0`（publishedAt 2026-08-23T17:12:15Z）→ https://github.com/zy789363/ToolSpan/releases/tag/v0.7.0，资产 6 项。
+
+至此 v0.7.0 发布闭环完成：Global API Key 完全移除（全库 grep 归零，仅保留历史 dated 记录）+ 全部验证绿 + 安装包实装 + tag + Release。
