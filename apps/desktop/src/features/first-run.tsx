@@ -9,6 +9,8 @@ import { useDesktopAdapter } from "../adapters/context";
 import type { RuntimeSnapshot, WorkspaceRoot } from "../adapters/types";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
+import { CopyButton } from "../components/ui/copy-button";
+import { Notice } from "../components/ui/notice";
 
 const formSchema = z.object({
   instanceName: z.string().trim().min(2).max(64).regex(/^[A-Za-z0-9 ._-]+$/u),
@@ -36,6 +38,7 @@ export function FirstRun({ snapshot, onFinished }: { snapshot: RuntimeSnapshot; 
     register,
     resetField,
     trigger,
+    watch,
   } = useForm<FirstRunForm>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -45,6 +48,13 @@ export function FirstRun({ snapshot, onFinished }: { snapshot: RuntimeSnapshot; 
       startAfterSave: true,
     },
   });
+
+  // 密码强度：<12 弱（不可提交）、12–15 中、≥16 强
+  const passwordValue = watch("ownerPassword");
+  const strength =
+    passwordValue.length === 0 ? 0 : passwordValue.length < 12 ? 1 : passwordValue.length < 16 ? 2 : 3;
+  const strengthLabel =
+    strength === 0 ? "" : strength === 1 ? t("onboarding.strengthWeak") : strength === 2 ? t("onboarding.strengthMedium") : t("onboarding.strengthStrong");
 
   const clearPassword = () => {
     resetField("ownerPassword");
@@ -116,11 +126,11 @@ export function FirstRun({ snapshot, onFinished }: { snapshot: RuntimeSnapshot; 
         <div className="onboarding-body">
           {step === 1 ? <div className="welcome-points"><span><ShieldCheck aria-hidden="true" size={17} />{t("onboarding.secureContract")}</span><span><Check aria-hidden="true" size={17} />{t("onboarding.noDomain")}</span></div> : null}
           {step === 2 ? <label className="field"><span>{t("onboarding.instanceLabel")}</span><input autoFocus placeholder={t("onboarding.instancePlaceholder")} {...register("instanceName")} />{errors.instanceName === undefined ? null : <small role="alert">{t("onboarding.validationName")}</small>}</label> : null}
-          {step === 3 ? <div className="root-picker"><Button onClick={() => { void adapter.pickAllowedRoot().then((root) => { if (root !== null) setRoots((current) => current.some((item) => item.id === root.id) ? current : [...current, root]); }, () => setFailed(true)); }}><FolderPlus aria-hidden="true" size={15} />{t("onboarding.addRoot")}</Button>{roots.length === 0 ? <p>{t("onboarding.rootsEmpty")}</p> : roots.map((root) => <div className="selected-root" key={root.id}><span><strong>{root.name}</strong><code>{root.path}</code></span><Button aria-label={`${t("common.remove")} ${root.name}`} onClick={() => setRoots((current) => current.filter((item) => item.id !== root.id))} size="compact" variant="ghost">{t("common.remove")}</Button></div>)}</div> : null}
+          {step === 3 ? <div className="root-picker"><Button onClick={() => { void adapter.pickAllowedRoot().then((root) => { if (root !== null) setRoots((current) => current.some((item) => item.id === root.id) ? current : [...current, root]); }, () => setFailed(true)); }}><FolderPlus aria-hidden="true" size={15} />{t("onboarding.addRoot")}</Button>{roots.length === 0 ? <p>{t("onboarding.rootsEmpty")}</p> : roots.map((root) => <div className="selected-root" key={root.id}><span><strong>{root.name}</strong><code>{root.path}</code></span><Button aria-label={`${t("common.remove")} ${root.name}`} onClick={() => setRoots((current) => current.filter((item) => item.id !== root.id))} size="compact" variant="ghost">{t("common.remove")}</Button></div>)}<Notice className="onboarding-notice" icon={<ShieldCheck aria-hidden="true" size={15} />}>{t("onboarding.escapeNote")}</Notice></div> : null}
           {step === 4 ? <div className="path-summary"><div><span>{t("onboarding.statePath")}</span><code>{snapshot.statePath}</code></div><div><span>{t("onboarding.logPath")}</span><code>{snapshot.logPath}</code></div></div> : null}
-          {step === 5 ? <div className="password-fields"><label className="field"><span>{t("onboarding.passwordLabel")}</span><input autoComplete="new-password" autoFocus placeholder={t("onboarding.passwordPlaceholder")} type="password" {...register("ownerPassword")} />{errors.ownerPassword === undefined ? null : <small role="alert">{t("onboarding.validationPassword")}</small>}</label><label className="field"><span>{t("onboarding.passwordConfirmLabel")}</span><input autoComplete="new-password" placeholder={t("onboarding.passwordPlaceholder")} type="password" {...register("ownerPasswordConfirm")} />{errors.ownerPasswordConfirm === undefined ? null : <small role="alert">{errors.ownerPasswordConfirm.message === "password_mismatch" ? t("onboarding.validationPasswordMatch") : t("onboarding.validationPassword")}</small>}</label></div> : null}
+          {step === 5 ? <div className="password-fields"><label className="field"><span>{t("onboarding.passwordLabel")}</span><input autoComplete="new-password" autoFocus placeholder={t("onboarding.passwordPlaceholder")} type="password" {...register("ownerPassword")} />{errors.ownerPassword === undefined ? null : <small role="alert">{t("onboarding.validationPassword")}</small>}</label><label className="field"><span>{t("onboarding.passwordConfirmLabel")}</span><input autoComplete="new-password" placeholder={t("onboarding.passwordPlaceholder")} type="password" {...register("ownerPasswordConfirm")} />{errors.ownerPasswordConfirm === undefined ? null : <small role="alert">{errors.ownerPasswordConfirm.message === "password_mismatch" ? t("onboarding.validationPasswordMatch") : t("onboarding.validationPassword")}</small>}</label><div className="password-strength" aria-hidden="true">{[1, 2, 3].map((level) => <span className={`password-strength__bar${level <= strength ? ` is-${strength}` : ""}`} key={level} />)}<span className="password-strength__label">{strengthLabel}</span></div></div> : null}
           {step === 6 ? <div className="review-list"><div><span>{t("onboarding.instanceLabel")}</span><strong>{getValues("instanceName")}</strong></div><div><span>{t("workspaces.title")}</span><strong>{roots.length}</strong></div><div><span>{t("settings.ownerPassword")}</span><strong>••••••••••••</strong></div><label className="check-row"><input type="checkbox" {...register("startAfterSave")} /><span>{t("onboarding.startAfterSave")}</span></label></div> : null}
-          {step === 7 ? <div className="success-orbit" aria-hidden="true"><Check size={30} /></div> : null}
+          {step === 7 ? <div className="success-block"><div className="success-orbit" aria-hidden="true"><Check size={30} /></div><div className="onboarding-url"><span>{t("connection.localMcpUrl")}</span><div className="onboarding-url__row"><code className="mono-box">{snapshot.connection.localUrl ?? t("common.notConfigured")}</code>{snapshot.connection.localUrl === null ? null : <CopyButton compact value={snapshot.connection.localUrl} />}</div></div></div> : null}
           {failed ? <p className="inline-error" role="alert">{t("errors.operationDescription")}</p> : null}
         </div>
 
