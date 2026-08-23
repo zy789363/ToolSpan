@@ -62,7 +62,5 @@ export function assertPersistable(value: unknown, secrets: readonly string[] = [
 }
 
 export function credentialSecrets(credential: import("./cloudflare-adapter.js").CloudflareCredential): string[] {
-  return credential.kind === "api_token"
-    ? [credential.token]
-    : [credential.email, credential.key];
+  return [credential.token];
 }

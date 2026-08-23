@@ -9,9 +9,7 @@
     "zoneStatus": "UNKNOWN",
     "credentialAvailable": true,
     "credentialType": "UNKNOWN",
-    "apiTokenEnv": "TOOLSPAN_E2E_CF_API_TOKEN",
-    "globalEmailEnv": "TOOLSPAN_E2E_CF_GLOBAL_EMAIL",
-    "globalKeyEnv": "CloudFlareAPIKEY"
+    "apiTokenEnv": "TOOLSPAN_E2E_CF_API_TOKEN"
   },
   "browserAutomation": {
     "chromeAuthorized": true,

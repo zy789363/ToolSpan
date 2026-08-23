@@ -374,7 +374,6 @@ test("test-environment v2 accepts only flags, IDs and environment references and
     readFile(defaultSchemaPath, "utf8").then(JSON.parse),
     readFile(path.join(projectRoot, "examples", "test-environment.example.json"), "utf8").then(JSON.parse),
   ]);
-  manifest.cloudflare.globalKeyEnv = "CloudFlareAPIKEY";
   const safe = analyzeTestEnvironment(manifest, schema);
   assert.deepEqual(safe.errors, []);
   assert.equal(safe.secretValues, 0);
@@ -392,9 +391,9 @@ test("test-environment v2 accepts only flags, IDs and environment references and
   assert.equal(result.secretValues, 1);
 
   const rawEnvironmentValue = structuredClone(manifest);
-  rawEnvironmentValue.cloudflare.globalKeyEnv = "abcdef0123456789abcdef0123456789abcdef0";
+  rawEnvironmentValue.cloudflare.apiTokenEnv = "abcdef0123456789abcdef0123456789abcdef0";
   const rawResult = analyzeTestEnvironment(rawEnvironmentValue, schema);
-  assert.ok(rawResult.errors.some((item) => item.includes("globalKeyEnv:EXPECTED_ENVIRONMENT_VARIABLE_NAME")));
+  assert.ok(rawResult.errors.some((item) => item.includes("apiTokenEnv:EXPECTED_ENVIRONMENT_VARIABLE_NAME")));
   assert.ok(rawResult.errors.includes("testEnvironment:SECRET_VALUE_FORBIDDEN"));
   assert.equal(rawResult.secretValues, 1);
 });
@@ -643,7 +642,6 @@ test("04 Release matrix is exact and missing evidence never becomes PASS", async
     "E-WIN-01",
     "E-SIGN-01",
     "E-CF-TOKEN-01",
-    "E-CF-GLOBAL-01",
     "E-CF-WIN-01",
     "E-HOST-01",
     "E-CODEX-01",
@@ -780,7 +778,6 @@ test("Cloudflare API PASS proves the aiqushi.top lifecycle, idempotency, public 
   };
   for (const [id, credentialType] of [
     ["E-CF-TOKEN-01", "SCOPED_API_TOKEN"],
-    ["E-CF-GLOBAL-01", "GLOBAL_API_KEY"],
   ]) {
     const proof = { ...common, credentialType };
     assert.equal(validateManualGateEvidence(manualPass(id, proof), releaseGate(id)), true, id);
@@ -923,7 +920,6 @@ test("current non-PASS evidence remains compatible with the six-field envelope",
   for (const [id, status] of [
     ["E-HOST-01", "FAIL"],
     ["E-SIGN-01", "NOT_CONFIGURED"],
-    ["E-CF-GLOBAL-01", "EXTERNAL_GATE_PENDING"],
     ["E-CGPT-UI-01", "BLOCKED_BY_HOST_PLAN_OR_POLICY"],
     ["E-OAUTH-SOAK-01", "NOT_REQUIRED"],
     ["E-AFF-01", "STALE_FALLBACK"],

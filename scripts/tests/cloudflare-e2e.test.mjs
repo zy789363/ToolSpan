@@ -22,8 +22,6 @@ const DESIRED_TUNNEL = `toolspan-e2e-${SESSION_ID}`;
 
 const envNames = {
   apiToken: "TOOLSPAN_E2E_CF_API_TOKEN",
-  globalEmail: "TOOLSPAN_E2E_CF_GLOBAL_EMAIL",
-  globalKey: "CloudFlareAPIKEY",
 };
 
 function manifest(credentialType) {
@@ -39,8 +37,6 @@ function manifest(credentialType) {
       credentialAvailable: true,
       credentialType,
       apiTokenEnv: envNames.apiToken,
-      globalEmailEnv: envNames.globalEmail,
-      globalKeyEnv: envNames.globalKey,
     },
     browserAutomation: {
       chromeAuthorized: true,
@@ -278,40 +274,6 @@ test("an invalid v2 manifest stops before any environment read or network reques
   assert.equal(fetchCalls, 0);
 });
 
-test("credential references are limited to the three canonical environment names", async () => {
-  const invalid = manifest("GLOBAL_API_KEY");
-  invalid.cloudflare.globalKeyEnv = "TOOLSPAN_E2E_CF_GLOBAL_KEY";
-  let environmentReads = 0;
-  const environment = new Proxy({}, {
-    get() {
-      environmentReads += 1;
-      throw new Error("credential environment must not be read");
-    },
-  });
-  const result = await runCloudflareE2E(fixedRunOptions({
-    manifest: invalid,
-    environment,
-    fetch: async () => { throw new Error("must not fetch"); },
-  }));
-  assert.equal(result.evidence.reason, "TEST_ENVIRONMENT_V2_INVALID");
-  assert.equal(environmentReads, 0);
-});
-
-test("Global Key mode checks the email first and never dereferences the Key when email is absent", () => {
-  const keyValue = ["unit", "global", "credential", "value"].join("-");
-  let keyReads = 0;
-  const environment = new Proxy({ [envNames.globalKey]: keyValue }, {
-    get(target, property, receiver) {
-      if (property === envNames.globalKey) keyReads += 1;
-      return Reflect.get(target, property, receiver);
-    },
-  });
-  const result = resolveCredentialFromEnvironment(manifest("GLOBAL_API_KEY").cloudflare, environment);
-  assert.equal(result.checkpoint, "GLOBAL_KEY_EMAIL_ENV_VALUE_REQUIRED");
-  assert.equal(keyReads, 0);
-  assert.deepEqual(result.sensitiveValues, []);
-});
-
 test("every credential value is registered before validation and escaped reflection is rejected", () => {
   const invalidToken = ` ${["credential", "with\nquote\"", "value"].join("-")}`;
   const scoped = resolveCredentialFromEnvironment(manifest("SCOPED_API_TOKEN").cloudflare, {
@@ -322,15 +284,6 @@ test("every credential value is registered before validation and escaped reflect
   assert.equal(scanSanitizedEvidence({ reflected: invalidToken }, scoped.sensitiveValues).status, "FAIL");
   const escaped = JSON.stringify(invalidToken).slice(1, -1);
   assert.equal(scanSanitizedEvidence({ reflected: escaped }, scoped.sensitiveValues).status, "FAIL");
-
-  const email = ["owner", "example.test"].join("@");
-  const invalidKey = "short-key";
-  const global = resolveCredentialFromEnvironment(manifest("GLOBAL_API_KEY").cloudflare, {
-    [envNames.globalEmail]: email,
-    [envNames.globalKey]: invalidKey,
-  });
-  assert.equal(global.checkpoint, "GLOBAL_KEY_ENV_VALUE_INVALID");
-  assert.deepEqual(global.sensitiveValues, [email, invalidKey]);
 });
 
 test("Scoped read-only preflight resolves the fixed active target and persists only sanitized evidence", async () => {
@@ -367,25 +320,6 @@ test("Scoped read-only preflight resolves the fixed active target and persists o
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
-});
-
-test("Global Key + email uses only X-Auth headers and never reports either value", async () => {
-  const email = ["owner", "example.test"].join("@");
-  const key = ["unit", "global", "credential", "value"].join("-");
-  const mock = createCloudflareMock({ globalUserEmail: email.toUpperCase() });
-  const result = await runCloudflareE2E(fixedRunOptions({
-    manifest: manifest("GLOBAL_API_KEY"),
-    environment: { [envNames.globalEmail]: email, [envNames.globalKey]: key },
-    fetch: mock.fetch,
-  }));
-  assert.equal(result.evidence.decision, "DRY_RUN_READY");
-  const firstHeaders = mock.state.calls[0].headers;
-  assert.equal(firstHeaders.get("X-Auth-Email"), email);
-  assert.equal(firstHeaders.get("X-Auth-Key"), key);
-  assert.equal(firstHeaders.get("Authorization"), null);
-  const serialized = JSON.stringify(result.evidence);
-  assert.ok(!serialized.includes(email));
-  assert.ok(!serialized.includes(key));
 });
 
 test("a non-active zone is fully inspected read-only and hard-stops before Apply", async () => {

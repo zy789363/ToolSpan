@@ -6,7 +6,7 @@ Named Tunnel / DNS Apply 的硬前置条件是：目标 Zone 存在且 `zone sta
 
 在任何 Apply 前展示：
 
-1. 当前 credential mode（Scoped API Token 或 Advanced / Legacy Global API Key；不显示值）；
+1. 当前 credential mode（Scoped API Token；不显示值）；
 2. `aiqushi.top` 的 zone ID、account ID 与 zone status；
 3. Pending 时 Cloudflare assigned nameservers；
 4. `mcp.aiqushi.top` 现有 DNS 状态；

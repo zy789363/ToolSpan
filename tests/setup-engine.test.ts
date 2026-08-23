@@ -18,7 +18,7 @@ const testCredential = { kind: "api_token" as const, token: "test-management-tok
 
 function setupManifest(overrides: Partial<SetupManifestDraft> = {}): SetupManifestDraft {
   return {
-    toolSpanVersion: "0.6.0",
+    toolSpanVersion: "0.7.0",
     instanceName: "Local test",
     localUrl: "http://127.0.0.1:8787",
     desiredHostname: "mcp.example.test",
@@ -114,7 +114,7 @@ describe("SetupService", () => {
       zoneName: "example.test",
       credential,
       manifest: {
-        toolSpanVersion: "0.6.0",
+        toolSpanVersion: "0.7.0",
         instanceName: "Local test",
         localUrl: "http://127.0.0.1:8787",
         desiredHostname: "mcp.example.test",
@@ -157,7 +157,7 @@ describe("SetupService", () => {
       zoneName: "example.test",
       credential,
       manifest: {
-        toolSpanVersion: "0.6.0",
+        toolSpanVersion: "0.7.0",
         instanceName: "Local test",
         localUrl: "http://127.0.0.1:8787",
         desiredHostname: "mcp.example.test",
@@ -194,7 +194,7 @@ describe("SetupService", () => {
       zoneName: "example.test",
       credential,
       manifest: {
-        toolSpanVersion: "0.6.0",
+        toolSpanVersion: "0.7.0",
         instanceName: "Local test",
         localUrl: "http://127.0.0.1:8787",
         desiredHostname: "mcp.example.test",
@@ -258,21 +258,6 @@ describe("SetupService", () => {
       "bob.ns.cloudflare.com",
     ]);
     expect(harness.cloudflare.mutationCalls).toEqual([]);
-  });
-
-  it("requires the Global API Key full-access acknowledgement phrase", async () => {
-    const harness = await setupHarness();
-    await expect(
-      preflightSession(harness.service, "global-ack", {
-        credential: {
-          kind: "global_api_key",
-          email: "owner@example.test",
-          key: "fake-global-key",
-          acknowledgement: "wrong phrase" as "I UNDERSTAND GLOBAL API KEY ACCESS",
-        },
-      }),
-    ).rejects.toThrow("I UNDERSTAND GLOBAL API KEY ACCESS");
-    expect(harness.cloudflare.calls).toEqual([]);
   });
 
   it("rejects unbounded client session identifiers before creating state", async () => {
@@ -682,7 +667,6 @@ describe("SetupService", () => {
   it.each([
     ["invalid scoped token", "INVALID_CREDENTIAL" as const],
     ["insufficient scoped token", "INSUFFICIENT_CREDENTIAL" as const],
-    ["Global Key email mismatch", "GLOBAL_KEY_EMAIL_MISMATCH" as const],
   ])("reports %s without creating a Setup session", async (_scenario, code) => {
     const harness = await setupHarness();
     harness.cloudflare.failures.set(

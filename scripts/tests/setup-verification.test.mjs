@@ -299,5 +299,5 @@ test("Setup CI has Ubuntu and Windows Node 24 source jobs and supplies no extern
     && command.includes(".toolspan-dev/goal-state.json")));
   assert.ok(commands.includes("npm run verify:setup"));
   const source = JSON.stringify(setup);
-  assert.doesNotMatch(source, /(?:CloudFlareAPIKEY|CLOUDFLARE_API_TOKEN|GLOBAL_API_KEY|\bsecrets\b)/iu);
+  assert.doesNotMatch(source, /(?:CloudFlareAPIKEY|CLOUDFLARE_API_TOKEN|\bsecrets\b)/iu);
 });

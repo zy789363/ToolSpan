@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -6,8 +6,6 @@ import { createDemoDesktopAdapter, demoSetupSnapshot } from "../../src/adapters/
 import type { DesktopAdapter, SetupSnapshot } from "../../src/adapters/types";
 import { chatGptSetupContent, commercialSetupContent } from "../../src/lib/setup-content";
 import { renderApp } from "../render-app";
-
-const GLOBAL_ACKNOWLEDGEMENT = "I UNDERSTAND GLOBAL API KEY ACCESS";
 
 function plannedSnapshot(overrides: Partial<SetupSnapshot> = {}): SetupSnapshot {
   return {
@@ -44,7 +42,7 @@ describe("Setup Center", () => {
     const { container } = await renderApp({ page: "setup" });
     await screen.findByRole("heading", { level: 1, name: "Setup Center" });
 
-    for (const [index, name] of ["Guided manual", "Scoped API token", "Global API key", "Agent-assisted"].entries()) {
+    for (const [index, name] of ["Guided manual", "Scoped API token", "Agent-assisted"].entries()) {
       const query = { name: new RegExp(name, "iu") };
       expect(index === 0 ? await screen.findByRole("button", query) : screen.getByRole("button", query)).toBeTruthy();
     }
@@ -181,58 +179,6 @@ describe("Setup Center", () => {
     expect(screen.getByText(/Apply is stopped/iu)).toBeTruthy();
     expect(getSetupSnapshot).toHaveBeenCalledTimes(2);
   });
-
-  it("requires the Global Key full-access phrase and a separate Apply confirmation", async () => {
-    const user = userEvent.setup();
-    const base = createDemoDesktopAdapter();
-    const actualApply = base.setupApply;
-    const setupApply = vi.fn(actualApply);
-    const adapter: DesktopAdapter = { ...base, setupApply };
-    await renderApp({ adapter, page: "setup" });
-    await user.click(await screen.findByRole("button", { name: /Global API key/iu }));
-
-    await user.type(screen.getByLabelText("Cloudflare account email"), "owner@example.test");
-    await user.type(screen.getByLabelText("Global API key"), "fixture-global-key");
-    await user.type(screen.getByLabelText(/^Type the confirmation phrase/iu), "wrong phrase");
-    await user.click(screen.getByRole("button", { name: "Verify credential and run preflight" }));
-    expect((await screen.findByRole("alert")).textContent).toContain("exact full-access confirmation phrase");
-
-    const phrase = screen.getByLabelText(/^Type the confirmation phrase/iu);
-    await user.clear(phrase);
-    await user.type(phrase, GLOBAL_ACKNOWLEDGEMENT);
-    await user.click(screen.getByRole("button", { name: "Verify credential and run preflight" }));
-    await waitFor(() => expect((screen.getByRole("button", { name: "Generate Dry Run" }) as HTMLButtonElement).disabled).toBe(false));
-    expect(screen.queryByLabelText("Global API key")).toBeNull();
-
-    await user.click(screen.getByRole("button", { name: "Generate Dry Run" }));
-    await screen.findByRole("button", { name: "Enter credential for Apply" });
-    await user.type(screen.getByLabelText("Cloudflare account email"), "owner@example.test");
-    await user.type(screen.getByLabelText("Global API key"), "fixture-global-key-for-apply");
-    await user.type(screen.getByLabelText(/^Type the confirmation phrase/iu), GLOBAL_ACKNOWLEDGEMENT);
-    await user.click(screen.getByRole("button", { name: "Enter credential for Apply" }));
-    expect(await screen.findByText(/Credential accepted for this Apply checkpoint/iu)).toBeTruthy();
-    await waitFor(() => expect((screen.getByRole("button", { name: "Apply confirmed plan" }) as HTMLButtonElement).disabled).toBe(false));
-    await user.click(screen.getByRole("button", { name: "Apply confirmed plan" }));
-    const dialog = await screen.findByRole("alertdialog");
-    expect(within(dialog).getByText(/full account access/iu)).toBeTruthy();
-    expect(setupApply).not.toHaveBeenCalled();
-    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect((screen.getByRole("button", { name: "Apply confirmed plan" }) as HTMLButtonElement).disabled).toBe(true));
-    expect((screen.getByLabelText("Global API key") as HTMLInputElement).value).toBe("");
-
-    await user.type(screen.getByLabelText("Cloudflare account email"), "owner@example.test");
-    await user.type(screen.getByLabelText("Global API key"), "fixture-global-key-after-cancel");
-    await user.type(screen.getByLabelText(/^Type the confirmation phrase/iu), GLOBAL_ACKNOWLEDGEMENT);
-    await user.click(screen.getByRole("button", { name: "Enter credential for Apply" }));
-    await user.click(screen.getByRole("button", { name: "Apply confirmed plan" }));
-    await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Apply confirmed plan" }));
-    await waitFor(() => expect(setupApply).toHaveBeenCalledTimes(1));
-    expect(await screen.findByRole("heading", { name: "Non-secret verification receipt" })).toBeTruthy();
-    expect(screen.getByText("Second-run duplicate creates").nextElementSibling?.textContent).toBe("0");
-    await user.click(screen.getByRole("button", { name: "Start a new setup session" }));
-    expect(screen.getByText("IDLE")).toBeTruthy();
-    expect(await screen.findByLabelText("Scoped API token")).toBeTruthy();
-  }, 15_000);
 
   it("shows partial rollback evidence and leaves terminal cleanup to explicit manual steps", async () => {
     const setupSnapshot = plannedSnapshot({

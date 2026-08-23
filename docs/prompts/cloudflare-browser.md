@@ -4,7 +4,7 @@
 
 先做只读检查：确认 account、Zone ID/status、Cloudflare assigned nameservers、现有 `mcp.aiqushi.top` DNS、`toolspan-` Tunnel collision 与 planned changes。只有 Zone 实际为 `Active` 才能提出 Named Tunnel/DNS Apply。Zone 缺失或 Pending 时进入 Cloudflare Add site 与 registrar nameserver onboarding；只操作 `aiqushi.top`，到 NameSilo 最终 Save 前暂停。不得购买域名、改支付信息或操作其他域名。
 
-Scoped API Token 为推荐模式；Global API Key 是 Advanced / Legacy 且要显示 Full Access 警告。到 credential field 时让用户本地输入。不要读取密码管理器、剪贴板历史、DOM secret、截图 secret 或 shell history；不要把 Secret 放进聊天、Prompt、命令行、日志、receipt 或诊断。
+Scoped API Token 为推荐模式。到 credential field 时让用户本地输入。不要读取密码管理器、剪贴板历史、DOM secret、截图 secret 或 shell history；不要把 Secret 放进聊天、Prompt、命令行、日志、receipt 或诊断。
 
 Dry Run 必须列出 created/reused/updated/untouched、冲突、rollback precondition 和第二次运行 duplicates=0 的预期。未知 Tunnel/DNS 一律停止，不覆盖。运行凭证只交给官方 cloudflared 机制。
 

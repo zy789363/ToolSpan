@@ -192,7 +192,7 @@ const rawSetupSnapshotSchema = z.object({
   receipt: setupReceiptSchema.optional(),
   blocker: z.object({
     code: z.enum([
-      "INVALID_CREDENTIAL", "INSUFFICIENT_CREDENTIAL", "GLOBAL_KEY_EMAIL_MISMATCH", "ZONE_NOT_FOUND", "ZONE_PENDING",
+      "INVALID_CREDENTIAL", "INSUFFICIENT_CREDENTIAL", "ZONE_NOT_FOUND", "ZONE_PENDING",
       "ZONE_NOT_ACTIVE", "TUNNEL_CONFLICT", "DNS_CONFLICT", "CONFIRMATION_REQUIRED", "ACTIVE_SESSION",
       "CREDENTIAL_REENTRY_REQUIRED", "FINGERPRINT_MISMATCH", "RECONCILIATION_REQUIRED", "APPLY_FAILED", "ROLLBACK_PARTIAL",
     ]),
@@ -202,7 +202,7 @@ const rawSetupSnapshotSchema = z.object({
   requiresCredential: z.boolean(),
   updatedAt: z.string(),
 }).strict();
-const setupCredentialResultSchema = z.object({ accepted: z.literal(true), credentialKind: z.enum(["api_token", "global_api_key"]) }).strict();
+const setupCredentialResultSchema = z.object({ accepted: z.literal(true), credentialKind: z.literal("api_token") }).strict();
 const setupDiscardResultSchema = z.object({ discarded: z.literal(true), sessionId: z.string().min(1) }).strict();
 const responseSchema = z.discriminatedUnion("ok", [
   z.object({ id: z.string(), ok: z.literal(true), result: z.unknown() }),

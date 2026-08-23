@@ -38,9 +38,7 @@ function containsForbiddenResponseKey(value: unknown): boolean {
 
 function credentialValues(credential: CloudflareCredential | undefined): string[] {
   if (credential === undefined) return [];
-  return credential.kind === "api_token"
-    ? [credential.token]
-    : [credential.email, credential.key, credential.acknowledgement];
+  return [credential.token];
 }
 
 function assertSecretFreeResult(

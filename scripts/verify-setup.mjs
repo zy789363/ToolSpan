@@ -36,7 +36,6 @@ export const SETUP_GOAL_IDS = [
   "S-CF-MANUAL-01",
   "S-CF-ZONE-01",
   "S-CF-TOKEN-01",
-  "S-CF-GLOBAL-01",
   "S-CF-IDEMP-01",
   "S-CF-ROLLBACK-01",
   "S-CGPT-01",

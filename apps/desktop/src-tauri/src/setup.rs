@@ -9,34 +9,17 @@ use crate::commands::{CommandError, DesktopState};
 use crate::protocol::DesktopRequest;
 
 const MAX_SECRET_BYTES: usize = 65_536;
-const GLOBAL_KEY_ACKNOWLEDGEMENT: &str = "I UNDERSTAND GLOBAL API KEY ACCESS";
 
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SetupCredentialInputValue {
-    ApiToken {
-        token: String,
-    },
-    GlobalApiKey {
-        email: String,
-        key: String,
-        acknowledgement: String,
-    },
+    ApiToken { token: String },
 }
 
 impl Drop for SetupCredentialInputValue {
     fn drop(&mut self) {
         match self {
             Self::ApiToken { token } => token.zeroize(),
-            Self::GlobalApiKey {
-                email,
-                key,
-                acknowledgement,
-            } => {
-                email.zeroize();
-                key.zeroize();
-                acknowledgement.zeroize();
-            }
         }
     }
 }
@@ -62,21 +45,13 @@ pub struct SetupCredentialAccepted {
 }
 
 enum StoredCredential {
-    ApiToken {
-        token: Zeroizing<String>,
-    },
-    GlobalApiKey {
-        email: Zeroizing<String>,
-        key: Zeroizing<String>,
-        acknowledgement: Zeroizing<String>,
-    },
+    ApiToken { token: Zeroizing<String> },
 }
 
 impl StoredCredential {
     fn kind(&self) -> &'static str {
         match self {
             Self::ApiToken { .. } => "api_token",
-            Self::GlobalApiKey { .. } => "global_api_key",
         }
     }
 
@@ -85,16 +60,6 @@ impl StoredCredential {
             Self::ApiToken { token } => json!({
                 "kind": "api_token",
                 "token": token.as_str(),
-            }),
-            Self::GlobalApiKey {
-                email,
-                key,
-                acknowledgement,
-            } => json!({
-                "kind": "global_api_key",
-                "email": email.as_str(),
-                "key": key.as_str(),
-                "acknowledgement": acknowledgement.as_str(),
             }),
         }
     }
@@ -313,15 +278,6 @@ fn take_stored_credential(input: &mut SetupCredentialInputValue) -> StoredCreden
         SetupCredentialInputValue::ApiToken { token } => StoredCredential::ApiToken {
             token: Zeroizing::new(std::mem::take(token)),
         },
-        SetupCredentialInputValue::GlobalApiKey {
-            email,
-            key,
-            acknowledgement,
-        } => StoredCredential::GlobalApiKey {
-            email: Zeroizing::new(std::mem::take(email)),
-            key: Zeroizing::new(std::mem::take(key)),
-            acknowledgement: Zeroizing::new(std::mem::take(acknowledgement)),
-        },
     }
 }
 
@@ -330,15 +286,6 @@ fn validate_credential(input: &SetupCredentialInputValue) -> Result<(), ()> {
         SetupCredentialInputValue::ApiToken { token } => {
             valid_secret(token).then_some(()).ok_or(())
         }
-        SetupCredentialInputValue::GlobalApiKey {
-            email,
-            key,
-            acknowledgement,
-        } => (valid_email(email)
-            && valid_secret(key)
-            && acknowledgement == GLOBAL_KEY_ACKNOWLEDGEMENT)
-            .then_some(())
-            .ok_or(()),
     }
 }
 
@@ -347,19 +294,6 @@ fn valid_secret(value: &str) -> bool {
         && value.len() <= MAX_SECRET_BYTES
         && value.trim() == value
         && !value.chars().any(char::is_control)
-}
-
-fn valid_email(value: &str) -> bool {
-    if value.is_empty()
-        || value.len() > 254
-        || value
-            .chars()
-            .any(|character| character.is_whitespace() || character.is_control())
-    {
-        return false;
-    }
-    let mut parts = value.split('@');
-    matches!((parts.next(), parts.next(), parts.next()), (Some(local), Some(domain), None) if !local.is_empty() && !domain.is_empty())
 }
 
 fn valid_session_id(value: &str) -> bool {
@@ -507,23 +441,6 @@ mod tests {
             }
         }
         assert_eq!(injections, 1);
-    }
-
-    #[test]
-    fn global_key_requires_email_and_the_exact_acknowledgement() {
-        let valid = SetupCredentialInputValue::GlobalApiKey {
-            email: "owner@example.test".into(),
-            key: "fixture-key".into(),
-            acknowledgement: GLOBAL_KEY_ACKNOWLEDGEMENT.into(),
-        };
-        assert!(validate_credential(&valid).is_ok());
-
-        let wrong = SetupCredentialInputValue::GlobalApiKey {
-            email: "owner@example.test".into(),
-            key: "fixture-key".into(),
-            acknowledgement: "remember this".into(),
-        };
-        assert!(validate_credential(&wrong).is_err());
     }
 
     #[test]

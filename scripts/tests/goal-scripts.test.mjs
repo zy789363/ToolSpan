@@ -94,19 +94,6 @@ test("goal state secret scan reports paths but never echoes secret values", () =
   assert.deepEqual(findSecretLikeState(document), []);
 });
 
-test("goal state secret scan detects a synthetic Cloudflare Global key without echoing its field or value", () => {
-  const document = state();
-  const secretField = "ownerCloudflareUltraPrivateApiKey";
-  const syntheticValue = "cfk_A7d9K2mP4qR6sT8vW1xY3zB5cD7eF9gH2jL4nQ6r";
-  document.environment[secretField] = syntheticValue;
-
-  const findings = findSecretLikeState(document);
-
-  assert.ok(findings.some((finding) => finding.includes("CLOUDFLARE_GLOBAL_KEY")));
-  assert.equal(findings.some((finding) => finding.includes(secretField)), false);
-  assert.equal(findings.some((finding) => finding.includes(syntheticValue)), false);
-});
-
 test("goal state secret scan detects a generic synthetic high-entropy value without echoing it", () => {
   const document = state();
   const syntheticValue = "q7V2mN9xR4cT8bK3wP6dH1sF5jL0zG2uY9eA7iC4";

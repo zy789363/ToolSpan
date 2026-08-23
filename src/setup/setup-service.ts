@@ -22,16 +22,24 @@ import {
   SETUP_RECEIPT_SCHEMA_VERSION,
   SetupError,
   type SetupBlocker,
+  type SetupJournal,
+  type SetupJournalEntry,
+  type SetupLock,
   type SetupManifest,
   type SetupManifestDraft,
   type SetupPlan,
   type SetupPlanAction,
   type SetupReceipt,
   type SetupReceiptResource,
+  type SetupRollbackResource,
   type SetupSessionRecord,
   type SetupSnapshot,
   type SetupStatus,
 } from "./types.js";
+
+// =============================================================================
+// Public API
+// =============================================================================
 
 export interface SetupServiceOptions {
   directory: string;
@@ -43,14 +51,25 @@ export interface SetupServiceOptions {
 }
 
 export interface SetupService {
+  /** Returns the current snapshot for the selected (or active) session, if any. */
   snapshot(input?: { sessionId?: string }): Promise<SetupSnapshot | undefined>;
+  /** Creates a new session: validates inputs, verifies the credential, and persists the manifest + journal. */
   preflight(input: { sessionId: string; idempotencyKey: string; zoneName: string; manifest: SetupManifestDraft; credential: CloudflareCredential }): Promise<SetupSnapshot>;
+  /** Dry-runs the domain transaction and produces a plan that requires confirmation. */
   plan(input: { sessionId: string }): Promise<SetupSnapshot>;
+  /** Applies the planned domain transaction, then verifies tunnel + service health. */
   apply(input: { sessionId: string; confirmation: "APPLY"; credential?: CloudflareCredential }): Promise<SetupSnapshot>;
+  /** Reverts every resource this session created or updated, in reverse apply order. */
   rollback(input: { sessionId: string; confirmation: "ROLLBACK"; credential?: CloudflareCredential }): Promise<SetupSnapshot>;
+  /** Compares remote resources against the Apply journal and re-verifies health when they match. */
   reconcile(input: { sessionId: string; credential?: CloudflareCredential }): Promise<SetupSnapshot>;
+  /** Drops the in-memory credential for a session (marks it as needing re-entry). */
   discard(input: { sessionId: string }): Promise<void>;
 }
+
+// =============================================================================
+// Service factory
+// =============================================================================
 
 export function createSetupService(options: SetupServiceOptions): SetupService {
   const store = new SetupStore(options.directory);
@@ -60,9 +79,12 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
   const credentialCache = new Map<string, CloudflareCredential>();
   let initialization: Promise<void> | undefined;
 
+  /** ISO-8601 timestamp for journaling and record fields. */
+  const timestamp = (): string => now().toISOString();
+
   const initialize = async (): Promise<void> => {
     initialization ??= (async () => {
-      const at = now().toISOString();
+      const at = timestamp();
       await store.initialize(at);
       const stale = await recoverVerifiedStaleLock(store, processInspector, at);
       const lock = await store.readLock();
@@ -75,24 +97,25 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
           ((record.status === "APPLYING" || record.status === "ROLLING_BACK") &&
             (lock === undefined || lock.sessionId !== record.sessionId));
         if (!needsStartupCredential || stale?.sessionId === record.sessionId) continue;
-        const from = record.status;
-        transitionRecord(record, "NEEDS_CREDENTIAL_REENTRY", at);
         record.blocker = {
           code: "CREDENTIAL_REENTRY_REQUIRED",
           message: "The host restarted and the in-memory Cloudflare credential is unavailable",
         };
-        await store.writeSession(record);
-        await store.appendJournal(record.sessionId, {
+        await writeTransition(
+          record,
+          "NEEDS_CREDENTIAL_REENTRY",
           at,
-          event: "STATE_TRANSITION",
-          from,
-          to: "NEEDS_CREDENTIAL_REENTRY",
-          detail: "Credential cache is intentionally process-local",
-        });
+          undefined,
+          "Credential cache is intentionally process-local",
+        );
       }
     })();
     await initialization;
   };
+
+  // ---------------------------------------------------------------------------
+  // Shared mutation scaffolding
+  // ---------------------------------------------------------------------------
 
   const getSnapshot = async (sessionId?: string): Promise<SetupSnapshot | undefined> => {
     await initialize();
@@ -121,6 +144,77 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
     };
   };
 
+  const snapshotOrThrow = async (sessionId: string): Promise<SetupSnapshot> => (await getSnapshot(sessionId))!;
+
+  /**
+   * Persists a state transition together with its journal entry.
+   * `from` is captured from the record's current status, so call it before mutating anything else.
+   */
+  const writeTransition = async (
+    record: SetupSessionRecord,
+    to: SetupStatus,
+    at: string,
+    secrets?: readonly string[],
+    detail?: string,
+  ): Promise<void> => {
+    const from = record.status;
+    transitionRecord(record, to, at);
+    await store.writeSession(record, secrets);
+    await store.appendJournal(
+      record.sessionId,
+      {
+        at,
+        event: "STATE_TRANSITION",
+        from,
+        to,
+        ...(detail === undefined ? {} : { detail }),
+      },
+      secrets,
+    );
+  };
+
+  /**
+   * Resolves the caller-supplied credential into (credential, redaction secrets),
+   * or records a CREDENTIAL_REENTRY_REQUIRED blocker and returns undefined so the
+   * caller can stop the operation and surface the snapshot.
+   */
+  const requireCredentialOrReenter = async (
+    record: SetupSessionRecord,
+    credential: CloudflareCredential | undefined,
+    message: string,
+  ): Promise<{ credential: CloudflareCredential; secrets: readonly string[] } | undefined> => {
+    if (credential !== undefined) {
+      validateCredential(credential);
+      return { credential, secrets: credentialSecrets(credential) };
+    }
+    await requireCredentialReentry(store, record, timestamp(), message);
+    return undefined;
+  };
+
+  /** Serializes mutation sessions via the on-disk lock; maps contention to an ACTIVE_SESSION blocker. */
+  const acquireMutationLock = async (
+    sessionId: string,
+    status: "APPLYING" | "ROLLING_BACK",
+    cause?: unknown,
+  ): Promise<void> => {
+    try {
+      await store.acquireLock({ schemaVersion: "1", sessionId, status, pid, acquiredAt: timestamp() });
+    } catch (error) {
+      if ((error as Error).message === "Another setup mutation session is active") {
+        throw new SetupError(
+          { code: "ACTIVE_SESSION", message: "Another Setup Apply or Rollback session is active" },
+          cause === undefined ? undefined : { cause },
+        );
+      }
+      throw error;
+    }
+  };
+
+  /** Releases the session lock if still held; never throws during cleanup. */
+  const releaseLockSafely = async (sessionId: string): Promise<void> => {
+    await store.releaseLock(sessionId).catch(() => undefined);
+  };
+
   return {
     snapshot: ({ sessionId } = {}) => getSnapshot(sessionId),
 
@@ -135,7 +229,7 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
       validateManifestDraft(draft, zoneName);
       validateCredential(credential);
       await options.cloudflare.verifyCredential({ credential });
-      const at = now().toISOString();
+      const at = timestamp();
       const manifest: SetupManifest = {
         ...draft,
         schemaVersion: SETUP_MANIFEST_SCHEMA_VERSION,
@@ -172,20 +266,12 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
       }
       const credential = credentialCache.get(sessionId);
       if (credential === undefined) {
-        const at = now().toISOString();
-        transitionRecord(record, "NEEDS_CREDENTIAL_REENTRY", at);
+        const at = timestamp();
         record.blocker = {
           code: "CREDENTIAL_REENTRY_REQUIRED",
           message: "Cloudflare credential must be entered again before planning can continue",
         };
-        await store.writeSession(record);
-        await store.appendJournal(sessionId, {
-          at,
-          event: "STATE_TRANSITION",
-          from: "PREFLIGHT",
-          to: "NEEDS_CREDENTIAL_REENTRY",
-          detail: "In-memory credential cache was unavailable",
-        });
+        await writeTransition(record, "NEEDS_CREDENTIAL_REENTRY", at, undefined, "In-memory credential cache was unavailable");
         throw new SetupError(record.blocker);
       }
       validateCredential(credential);
@@ -199,7 +285,7 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
         await persistBlocker(store, record, {
           code: "ZONE_NOT_FOUND",
           message: `Cloudflare zone ${record.target.zoneName} was not found. Onboard the domain before Apply.`,
-        }, now().toISOString(), secrets);
+        }, timestamp(), secrets);
         throw new SetupError(record.blocker!);
       }
       const { account, zone } = located;
@@ -209,27 +295,11 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
           message: `Cloudflare zone ${zone.name} is ${zone.status}; Apply is stopped until it is active.`,
           nameservers: zone.nameservers,
         };
-        await persistBlocker(store, record, blocker, now().toISOString(), secrets);
+        await persistBlocker(store, record, blocker, timestamp(), secrets);
         throw new SetupError(blocker);
       }
-      const tunnels = await collectPages((page) =>
-        options.cloudflare.listTunnels({
-          credential,
-          accountId: account.id,
-          name: manifest.tunnelName,
-          page,
-          perPage: 50,
-        }),
-      );
-      const dnsRecords = await collectPages((page) =>
-        options.cloudflare.listDnsRecords({
-          credential,
-          zoneId: zone.id,
-          name: manifest.desiredHostname,
-          page,
-          perPage: 50,
-        }),
-      );
+      const tunnels = await listTunnels(options.cloudflare, credential, account.id, manifest.tunnelName);
+      const dnsRecords = await listDnsRecords(options.cloudflare, credential, zone.id, manifest.desiredHostname);
       const ownedResourceIds = await locallyOwnedResourceIds(store);
       const tunnelsWithOwnership = tunnels.map((tunnel) => ({
         ...tunnel,
@@ -240,7 +310,7 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
         ownedByToolSpan: record.ownedByToolSpan === true || ownedResourceIds.dns.has(record.id),
       }));
       const serviceStatus = await options.cloudflared.inspect();
-      const plannedAt = now().toISOString();
+      const plannedAt = timestamp();
       let plan: SetupPlan;
       try {
         plan = await buildPlan({
@@ -272,15 +342,8 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
         to: "PLANNED",
         detail: `${plan.actions.length} non-secret actions planned`,
       }, secrets);
-      const waitingAt = now().toISOString();
-      transitionRecord(record, "WAITING_FOR_CONFIRMATION", waitingAt);
-      await store.writeSession(record, secrets);
-      await store.appendJournal(sessionId, {
-        at: waitingAt,
-        event: "STATE_TRANSITION",
-        from: "PLANNED",
-        to: "WAITING_FOR_CONFIRMATION",
-      }, secrets);
+      const waitingAt = timestamp();
+      await writeTransition(record, "WAITING_FOR_CONFIRMATION", waitingAt, secrets);
       credentialCache.delete(sessionId);
       return (await getSnapshot(sessionId))!;
     },
@@ -293,54 +356,34 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
         });
       }
       await initialize();
-      const pendingRecord = await requireSession(store, input.sessionId);
-      if (input.credential === undefined) {
-        await requireCredentialReentry(store, pendingRecord, now().toISOString(), "Apply requires a fresh Cloudflare credential");
-        return (await getSnapshot(input.sessionId))!;
-      }
-      const credential = input.credential;
-      validateCredential(credential);
-      const secrets = credentialSecrets(credential);
-      const record = pendingRecord;
+      const record = await requireSession(store, input.sessionId);
+      const resolved = await requireCredentialOrReenter(record, input.credential, "Apply requires a fresh Cloudflare credential");
+      if (resolved === undefined) return snapshotOrThrow(input.sessionId);
+      const { credential, secrets } = resolved;
       const manifest = await requireManifest(store, input.sessionId);
+      // A re-entered session that had already planned may proceed straight back to Apply.
       if (
         record.status === "NEEDS_CREDENTIAL_REENTRY" &&
         record.plan !== undefined &&
         (await store.readReceipt(input.sessionId)) === undefined
       ) {
-        transitionRecord(record, "WAITING_FOR_CONFIRMATION", now().toISOString());
+        transitionRecord(record, "WAITING_FOR_CONFIRMATION", timestamp());
         record.blocker = undefined;
         await store.writeSession(record, secrets);
       }
       if (record.status !== "WAITING_FOR_CONFIRMATION" || record.plan === undefined) {
         throw new Error(`Setup session must be waiting for confirmation (got ${record.status})`);
       }
-      const stale = await recoverVerifiedStaleLock(store, processInspector, now().toISOString());
+      const stale = await recoverVerifiedStaleLock(store, processInspector, timestamp());
       if (stale?.sessionId === input.sessionId) {
         throw new SetupError({
           code: "RECONCILIATION_REQUIRED",
           message: "The interrupted Apply must be reconciled before it can continue",
         });
       }
-      try {
-        await store.acquireLock({
-          schemaVersion: "1",
-          sessionId: input.sessionId,
-          status: "APPLYING",
-          pid,
-          acquiredAt: now().toISOString(),
-        });
-      } catch (error) {
-        if ((error as Error).message === "Another setup mutation session is active") {
-          throw new SetupError({
-            code: "ACTIVE_SESSION",
-            message: "Another Setup Apply or Rollback session is active",
-          }, { cause: error });
-        }
-        throw error;
-      }
+      await acquireMutationLock(input.sessionId, "APPLYING");
       credentialCache.set(input.sessionId, credential);
-      const startedAt = now().toISOString();
+      const startedAt = timestamp();
       const receipt: SetupReceipt = {
         schemaVersion: SETUP_RECEIPT_SCHEMA_VERSION,
         sessionId: input.sessionId,
@@ -353,302 +396,46 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
       };
       let lockHeld = true;
       try {
-        transitionRecord(record, "APPLYING", startedAt);
         record.blocker = undefined;
-        await store.writeSession(record, secrets);
-        await store.appendJournal(input.sessionId, {
-          at: startedAt,
-          event: "STATE_TRANSITION",
-          from: "WAITING_FOR_CONFIRMATION",
-          to: "APPLYING",
-        }, secrets);
+        await writeTransition(record, "APPLYING", startedAt, secrets);
         await options.cloudflare.verifyCredential({ credential });
         const plan = record.plan;
-        const accountId = plan.account.id;
-        const zoneId = plan.zone.id;
-
-        for (const kind of ["account", "zone"] as const) {
-          const action = requireAction(plan, kind);
-          receipt.resources.push(toReceiptResource(action, action.resourceId!, false, action.desiredFingerprint));
-        }
-
-        const tunnelAction = requireAction(plan, "tunnel");
-        let tunnel: CloudflareTunnel;
-        if (tunnelAction.classification === "created") {
-          tunnel = await options.cloudflare.createTunnel({
-            credential,
-            accountId,
-            name: manifest.tunnelName,
-            idempotencyKey: record.idempotencyKey,
-          });
-        } else {
-          const tunnels = await collectPages((page) =>
-            options.cloudflare.listTunnels({
-              credential,
-              accountId,
-              name: manifest.tunnelName,
-              page,
-              perPage: 50,
-            }),
-          );
-          tunnel = tunnels.find((candidate) => candidate.id === tunnelAction.resourceId) ??
-            failReconciliation("The planned tunnel is no longer present");
-          if (
-            tunnelAction.beforeFingerprint === undefined ||
-            tunnelFingerprint(tunnel) !== tunnelAction.beforeFingerprint
-          ) {
-            failReconciliation("Tunnel identity changed after Dry Run");
-          }
-        }
-        const tunnelReceipt = toReceiptResource(
-          tunnelAction,
-          tunnel.id,
-          tunnelAction.classification === "created",
-          tunnelFingerprint(tunnel),
-        );
-        receipt.resources.push(tunnelReceipt);
-        await appendApplyResource(store, input.sessionId, tunnelReceipt, now().toISOString(), secrets);
-
-        const configAction = requireAction(plan, "tunnel_config");
-        const config = desiredTunnelConfig(manifest);
-        const previousTunnelConfig = configAction.classification === "updated" || configAction.classification === "untouched"
-          ? await options.cloudflare.readTunnelConfig({ credential, accountId, tunnelId: tunnel.id })
-          : undefined;
-        if (
-          configAction.classification === "updated" &&
-          (previousTunnelConfig === undefined || fingerprint(previousTunnelConfig) !== configAction.beforeFingerprint)
-        ) {
-          failReconciliation("Tunnel configuration changed after Dry Run");
-        }
-        if (
-          configAction.classification === "untouched" &&
-          (previousTunnelConfig === undefined || fingerprint(previousTunnelConfig) !== configAction.desiredFingerprint)
-        ) {
-          failReconciliation("Tunnel configuration no longer matches the Dry Run");
-        }
-        if (configAction.classification === "created" || configAction.classification === "updated") {
-          await options.cloudflare.updateTunnelConfig({
-            credential,
-            accountId,
-            tunnelId: tunnel.id,
-            config,
-            ...(configAction.beforeFingerprint === undefined
-              ? {}
-              : { expectedFingerprint: configAction.beforeFingerprint }),
-          });
-        }
-        const configReceipt = toReceiptResource(
-          configAction,
-          tunnel.id,
-          tunnelAction.classification === "created",
-          fingerprint(config),
-        );
-        receipt.resources.push(configReceipt);
-        await appendApplyResource(
+        const ctx: ApplyContext = {
           store,
-          input.sessionId,
-          configReceipt,
-          now().toISOString(),
-          secrets,
-          previousTunnelConfig === undefined
-            ? undefined
-            : {
-                kind: "tunnel_config",
-                resourceId: tunnel.id,
-                accountId,
-                previousTunnelConfig,
-                appliedFingerprint: configReceipt.afterFingerprint!,
-              },
-        );
-
-        const dnsAction = requireAction(plan, "dns");
-        const desiredDns: Omit<CloudflareDnsRecord, "id" | "zoneId"> = {
-          type: "CNAME",
-          name: manifest.desiredHostname,
-          content: `${tunnel.id}.cfargotunnel.com`,
-          proxied: true,
-          ttl: 1,
-          ownedByToolSpan: true,
-          ownershipKey: record.idempotencyKey,
-        };
-        let dns: CloudflareDnsRecord;
-        let previousDnsRecord: CloudflareDnsRecord | undefined;
-        if (dnsAction.classification === "created") {
-          dns = await options.cloudflare.createDnsRecord({
-            credential,
-            zoneId,
-            record: desiredDns,
-            idempotencyKey: record.idempotencyKey,
-          });
-        } else if (dnsAction.classification === "updated") {
-          if (dnsAction.resourceId === undefined || dnsAction.beforeFingerprint === undefined) {
-            throw new Error("Updated DNS plan is missing its precondition");
-          }
-          const currentRecords = await collectPages((page) =>
-            options.cloudflare.listDnsRecords({
-              credential,
-              zoneId,
-              name: manifest.desiredHostname,
-              page,
-              perPage: 50,
-            }),
-          );
-          previousDnsRecord = currentRecords.find((candidate) => candidate.id === dnsAction.resourceId);
-          if (
-            previousDnsRecord === undefined ||
-            fingerprint(stripDnsIdentity(previousDnsRecord)) !== dnsAction.beforeFingerprint
-          ) {
-            failReconciliation("DNS record changed after Dry Run");
-          }
-          dns = await options.cloudflare.updateOwnedDnsRecord({
-            credential,
-            zoneId,
-            recordId: dnsAction.resourceId,
-            record: desiredDns,
-            expectedFingerprint: dnsAction.beforeFingerprint,
-          });
-        } else {
-          const records = await collectPages((page) =>
-            options.cloudflare.listDnsRecords({
-              credential,
-              zoneId,
-              name: manifest.desiredHostname,
-              page,
-              perPage: 50,
-            }),
-          );
-          dns = records.find((candidate) => candidate.id === dnsAction.resourceId) ??
-            failReconciliation("The planned DNS record is no longer present");
-          if (fingerprint(stripDnsIdentity(dns)) !== dnsAction.desiredFingerprint) {
-            failReconciliation("DNS record no longer matches the Dry Run");
-          }
-        }
-        const dnsReceipt = toReceiptResource(
-          dnsAction,
-          dns.id,
-          dnsAction.classification === "created",
-          fingerprint(stripDnsIdentity(dns)),
-        );
-        receipt.resources.push(dnsReceipt);
-        await appendApplyResource(
-          store,
-          input.sessionId,
-          dnsReceipt,
-          now().toISOString(),
-          secrets,
-          previousDnsRecord === undefined
-            ? undefined
-            : {
-                kind: "dns",
-                resourceId: dns.id,
-                zoneId,
-                previousDnsRecord,
-                appliedFingerprint: dnsReceipt.afterFingerprint!,
-              },
-        );
-
-        const cloudflaredAction = requireAction(plan, "cloudflared");
-        let serviceId = cloudflaredAction.resourceId;
-        let serviceFingerprint = cloudflaredAction.beforeFingerprint;
-        let serviceOwned = false;
-        if (cloudflaredAction.classification === "created") {
-          const runtimeCredential = await options.cloudflare.getTunnelRuntimeCredential({
-            credential,
-            accountId,
-            tunnelId: tunnel.id,
-          });
-          let installed: Awaited<ReturnType<CloudflaredAdapter["install"]>>;
-          try {
-            installed = await options.cloudflared.install({
-              sessionId: input.sessionId,
-              tunnelId: tunnel.id,
-              hostname: manifest.desiredHostname,
-              localUrl: manifest.localUrl,
-              runtimeCredential: runtimeCredential.token,
-            });
-          } catch (error) {
-            throw new Error(
-              redactText(
-                error instanceof Error ? error.message : "cloudflared installation failed",
-                [...secrets, runtimeCredential.token],
-              ),
-              { cause: error },
-            );
-          }
-          serviceId = installed.serviceId;
-          serviceFingerprint = installed.serviceFingerprint;
-          serviceOwned = installed.ownedBySession && installed.ownerSessionId === input.sessionId;
-        }
-        if (serviceId === undefined) {
-          throw new Error("cloudflared service ID is unavailable");
-        }
-        if (cloudflaredAction.classification === "reused") {
-          const currentService = await options.cloudflared.inspect();
-          if (
-            !currentService.serviceInstalled ||
-            currentService.serviceId !== serviceId ||
-            currentService.serviceFingerprint !== serviceFingerprint
-          ) {
-            failReconciliation("cloudflared service changed after Dry Run");
-          }
-        }
-        const cloudflaredReceipt = toReceiptResource(
-          cloudflaredAction,
-          serviceId,
-          cloudflaredAction.classification === "created" && serviceOwned,
-          serviceFingerprint ?? cloudflaredAction.desiredFingerprint,
-        );
-        receipt.resources.push(cloudflaredReceipt);
-        await appendApplyResource(store, input.sessionId, cloudflaredReceipt, now().toISOString(), secrets);
-
-        const configMarker = requireAction(plan, "toolspan_config");
-        receipt.resources.push(toReceiptResource(configMarker, "publicBaseUrl", false, configMarker.desiredFingerprint));
-
-        const verifyingAt = now().toISOString();
-        transitionRecord(record, "VERIFYING", verifyingAt);
-        await store.writeSession(record, secrets);
-        await store.appendJournal(input.sessionId, {
-          at: verifyingAt,
-          event: "STATE_TRANSITION",
-          from: "APPLYING",
-          to: "VERIFYING",
-        }, secrets);
-        const tunnelHealth = await options.cloudflare.verifyTunnelHealth({
+          cloudflare: options.cloudflare,
+          cloudflared: options.cloudflared,
+          sessionId: input.sessionId,
+          record,
+          manifest,
+          plan,
           credential,
-          accountId,
-          tunnelId: tunnel.id,
-        });
-        receipt.verification.push({
-          check: "tunnel_health",
-          passed: tunnelHealth.healthy,
-          checkedAt: tunnelHealth.checkedAt,
-        });
-        const serviceHealth = await options.cloudflared.verify({ serviceId });
-        receipt.verification.push({
-          check: "cloudflared",
-          passed: serviceHealth.healthy,
-          checkedAt: serviceHealth.checkedAt,
-        });
+          secrets,
+          receipt,
+          at: timestamp,
+        };
+
+        applyAccountAndZoneMarkers(ctx);
+        const { tunnel, ownedBySession: tunnelOwnedBySession } = await applyTunnel(ctx);
+        const { previousTunnelConfig } = await applyTunnelConfig(ctx, tunnel, tunnelOwnedBySession);
+        const { dns, previousDnsRecord } = await applyDns(ctx, tunnel);
+        const { serviceId, serviceFingerprint, ownedBySession: serviceOwnedBySession } = await applyCloudflared(ctx, tunnel);
+        applyToolspanConfigMarker(ctx);
+
+        const verifyingAt = timestamp();
+        await writeTransition(record, "VERIFYING", verifyingAt, secrets);
+        const { tunnelHealth, serviceHealth } = await verifyAppliedResources(ctx, tunnel, serviceId);
         if (!tunnelHealth.healthy || !serviceHealth.healthy) {
           throw new Error("Setup verification failed");
         }
-        const completedAt = now().toISOString();
+        const completedAt = timestamp();
         receipt.completedAt = completedAt;
         await store.writeReceipt(receipt, secrets);
-        transitionRecord(record, "COMPLETE", completedAt);
-        record.requiresCredential = false;
-        await store.writeSession(record, secrets);
-        await store.appendJournal(input.sessionId, {
-          at: completedAt,
-          event: "STATE_TRANSITION",
-          from: "VERIFYING",
-          to: "COMPLETE",
-        }, secrets);
+        await writeTransition(record, "COMPLETE", completedAt, secrets);
         await store.releaseLock(input.sessionId);
         lockHeld = false;
-        return (await getSnapshot(input.sessionId))!;
+        return snapshotOrThrow(input.sessionId);
       } catch (error) {
-        const failedAt = now().toISOString();
+        const failedAt = timestamp();
         const safeMessage = redactText(error instanceof Error ? error.message : "Setup Apply failed", secrets);
         const publicError = error instanceof SetupError
           ? new SetupError({ ...error.blocker, message: safeMessage })
@@ -662,7 +449,6 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
         await store.writeReceipt(receipt, secrets);
         const failedFrom = record.status as SetupStatus;
         if (failedFrom === "APPLYING" || failedFrom === "VERIFYING") {
-          const from = failedFrom;
           transitionRecord(record, "NEEDS_RECONCILIATION", failedAt);
           record.requiresCredential = true;
           record.blocker = {
@@ -673,7 +459,7 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
           await store.appendJournal(input.sessionId, {
             at: failedAt,
             event: "APPLY_FAILED",
-            from,
+            from: failedFrom,
             to: "NEEDS_RECONCILIATION",
             detail: record.blocker.message,
           }, secrets);
@@ -682,7 +468,7 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
       } finally {
         credentialCache.delete(input.sessionId);
         if (lockHeld) {
-          await store.releaseLock(input.sessionId).catch(() => undefined);
+          await releaseLockSafely(input.sessionId);
         }
       }
     },
@@ -696,14 +482,10 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
       }
       await initialize();
       const record = await requireSession(store, input.sessionId);
-      if (record.status === "ROLLED_BACK") return (await getSnapshot(input.sessionId))!;
-      if (input.credential === undefined) {
-        await requireCredentialReentry(store, record, now().toISOString(), "Rollback requires a fresh Cloudflare credential");
-        return (await getSnapshot(input.sessionId))!;
-      }
-      const credential = input.credential;
-      validateCredential(credential);
-      const secrets = credentialSecrets(credential);
+      if (record.status === "ROLLED_BACK") return snapshotOrThrow(input.sessionId);
+      const resolved = await requireCredentialOrReenter(record, input.credential, "Rollback requires a fresh Cloudflare credential");
+      if (resolved === undefined) return snapshotOrThrow(input.sessionId);
+      const { credential, secrets } = resolved;
       const receipt = await store.readReceipt(input.sessionId);
       const manifest = await requireManifest(store, input.sessionId);
       if (receipt === undefined || record.plan === undefined) {
@@ -712,187 +494,76 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
       if (!["COMPLETE", "NEEDS_RECONCILIATION", "NEEDS_CREDENTIAL_REENTRY", "ROLLBACK_PARTIAL"].includes(record.status)) {
         throw new Error(`Setup session cannot rollback from ${record.status}`);
       }
-      const stale = await recoverVerifiedStaleLock(store, processInspector, now().toISOString());
-      if (stale !== undefined && stale.sessionId !== input.sessionId) {
-        // A verified-dead owner no longer blocks this independent rollback.
-      }
-      try {
-        await store.acquireLock({
-          schemaVersion: "1",
-          sessionId: input.sessionId,
-          status: "ROLLING_BACK",
-          pid,
-          acquiredAt: now().toISOString(),
-        });
-      } catch (error) {
-        if ((error as Error).message === "Another setup mutation session is active") {
-          throw new SetupError({ code: "ACTIVE_SESSION", message: "Another Setup Apply or Rollback session is active" });
-        }
-        throw error;
-      }
+      // A verified-dead owner no longer blocks this independent rollback.
+      await recoverVerifiedStaleLock(store, processInspector, timestamp());
+      await acquireMutationLock(input.sessionId, "ROLLING_BACK");
       credentialCache.set(input.sessionId, credential);
       let lockHeld = true;
       try {
         await options.cloudflare.verifyCredential({ credential });
-        const from = record.status;
-        const rollingAt = now().toISOString();
-        transitionRecord(record, "ROLLING_BACK", rollingAt);
+        const rollingAt = timestamp();
         record.blocker = undefined;
-        await store.writeSession(record, secrets);
-        await store.appendJournal(input.sessionId, {
-          at: rollingAt,
-          event: "STATE_TRANSITION",
-          from,
-          to: "ROLLING_BACK",
-        }, secrets);
+        await writeTransition(record, "ROLLING_BACK", rollingAt, secrets);
         const journal = await store.readJournal(input.sessionId);
         if (journal === undefined) throw new Error("Setup journal is unavailable");
         const rollbackResults: SetupReceipt["rollback"]["resources"] = [];
-        const accountId = record.plan.account.id;
-        const zoneId = record.plan.zone.id;
+        const ctx: RollbackResourceContext = {
+          store,
+          cloudflare: options.cloudflare,
+          cloudflared: options.cloudflared,
+          sessionId: input.sessionId,
+          manifest,
+          credential,
+          secrets,
+          accountId: record.plan.account.id,
+          zoneId: record.plan.zone.id,
+          journal,
+          at: timestamp,
+        };
+        // Undo in reverse apply order so dependent resources are removed first.
         for (const resource of [...receipt.resources].reverse()) {
           if (resource.classification === "untouched" || resource.classification === "reused") {
             continue;
           }
+          let result: SetupRollbackResource | undefined;
           try {
-            if (resource.kind === "cloudflared" && resource.classification === "created") {
-              if (!resource.ownedBySession || resource.afterFingerprint === undefined) {
-                throw new Error("cloudflared ownership proof is unavailable");
-              }
-              const status = await options.cloudflared.inspect();
-              if (
-                status.serviceId !== resource.resourceId ||
-                status.serviceFingerprint !== resource.afterFingerprint ||
-                status.ownedBySession !== true ||
-                status.ownerSessionId !== input.sessionId
-              ) {
-                throw new Error("cloudflared service fingerprint or ownership changed");
-              }
-              const removed = await options.cloudflared.uninstallOwnedService({
-                sessionId: input.sessionId,
-                serviceId: resource.resourceId,
-                expectedFingerprint: resource.afterFingerprint,
-              });
-              if (!removed.removed) throw new Error("cloudflared service was not removed");
-              rollbackResults.push({ kind: resource.kind, resourceId: resource.resourceId, outcome: "removed", reason: "Session-owned service removed" });
-            } else if (resource.kind === "dns") {
-              const records = await collectPages((page) =>
-                options.cloudflare.listDnsRecords({ credential, zoneId, name: manifest.desiredHostname, page, perPage: 50 }),
-              );
-              const current = records.find((candidate) => candidate.id === resource.resourceId);
-              if (current === undefined || fingerprint(stripDnsIdentity(current)) !== resource.afterFingerprint) {
-                throw new Error("DNS fingerprint changed after Apply");
-              }
-              if (resource.classification === "created") {
-                if (!resource.ownedBySession || options.cloudflare.deleteOwnedDnsRecord === undefined) {
-                  throw new Error("Session-owned DNS delete capability is unavailable");
-                }
-                const deleted = await options.cloudflare.deleteOwnedDnsRecord({
-                  credential,
-                  zoneId,
-                  recordId: resource.resourceId,
-                  expectedFingerprint: resource.afterFingerprint!,
-                });
-                if (!deleted.deleted) throw new Error("DNS record was not deleted");
-                rollbackResults.push({ kind: resource.kind, resourceId: resource.resourceId, outcome: "removed", reason: "Session-created DNS removed" });
-              } else if (resource.classification === "updated") {
-                const rollbackData = [...journal.entries].reverse().find(
-                  (entry) => entry.rollbackData?.kind === "dns" && entry.rollbackData.resourceId === resource.resourceId,
-                )?.rollbackData;
-                const previous = rollbackData?.previousDnsRecord;
-                if (previous === undefined) throw new Error("DNS restore data is unavailable");
-                await options.cloudflare.updateOwnedDnsRecord({
-                  credential,
-                  zoneId,
-                  recordId: resource.resourceId,
-                  record: stripDnsIdentity(previous),
-                  expectedFingerprint: resource.afterFingerprint!,
-                });
-                rollbackResults.push({ kind: resource.kind, resourceId: resource.resourceId, outcome: "restored", reason: "Owned DNS restored to its non-secret pre-change value" });
-              }
-            } else if (resource.kind === "tunnel_config" && resource.classification === "updated") {
-              const rollbackData = [...journal.entries].reverse().find(
-                (entry) => entry.rollbackData?.kind === "tunnel_config" && entry.rollbackData.resourceId === resource.resourceId,
-              )?.rollbackData;
-              const previous = rollbackData?.previousTunnelConfig;
-              if (previous === undefined || resource.afterFingerprint === undefined) {
-                throw new Error("Tunnel config restore data is unavailable");
-              }
-              const current = await options.cloudflare.readTunnelConfig({ credential, accountId, tunnelId: resource.resourceId });
-              if (current === undefined || fingerprint(current) !== resource.afterFingerprint) {
-                throw new Error("Tunnel config fingerprint changed after Apply");
-              }
-              await options.cloudflare.updateTunnelConfig({
-                credential,
-                accountId,
-                tunnelId: resource.resourceId,
-                config: previous,
-                expectedFingerprint: resource.afterFingerprint,
-              });
-              rollbackResults.push({ kind: resource.kind, resourceId: resource.resourceId, outcome: "restored", reason: "Owned tunnel config restored" });
-            } else if (resource.kind === "tunnel" && resource.classification === "created") {
-              if (!resource.ownedBySession || resource.afterFingerprint === undefined || options.cloudflare.deleteOwnedTunnel === undefined) {
-                throw new Error("Session-owned tunnel delete capability is unavailable");
-              }
-              const tunnels = await collectPages((page) =>
-                options.cloudflare.listTunnels({ credential, accountId, name: manifest.tunnelName, page, perPage: 50 }),
-              );
-              const current = tunnels.find((candidate) => candidate.id === resource.resourceId);
-              if (current === undefined || tunnelFingerprint(current) !== resource.afterFingerprint) {
-                throw new Error("Tunnel fingerprint changed after Apply");
-              }
-              const deleted = await options.cloudflare.deleteOwnedTunnel({
-                credential,
-                accountId,
-                tunnelId: resource.resourceId,
-                expectedFingerprint: resource.afterFingerprint,
-              });
-              if (!deleted.deleted) throw new Error("Tunnel was not deleted");
-              rollbackResults.push({ kind: resource.kind, resourceId: resource.resourceId, outcome: "removed", reason: "Session-created tunnel removed" });
-            }
+            result = await rollbackResource(ctx, resource);
           } catch (error) {
-            rollbackResults.push({
+            result = {
               kind: resource.kind,
               resourceId: resource.resourceId,
               outcome: "failed",
               reason: redactText(error instanceof Error ? error.message : "Rollback action failed", secrets),
-            });
+            };
           }
-          const latest = rollbackResults.at(-1);
-          if (latest !== undefined && latest.resourceId === resource.resourceId) {
-            receipt.rollback = { status: "partial", resources: [...rollbackResults] };
-            await store.writeReceipt(receipt, secrets);
-            await store.appendJournal(input.sessionId, {
-              at: now().toISOString(),
-              event: "ROLLBACK_ACTION",
-              detail: `${latest.kind}:${latest.resourceId}:${latest.outcome}:${latest.reason}`,
-            }, secrets);
-          }
+          if (result === undefined) continue;
+          rollbackResults.push(result);
+          // Persist incremental progress so a crash mid-rollback can be resumed.
+          receipt.rollback = { status: "partial", resources: [...rollbackResults] };
+          await store.writeReceipt(receipt, secrets);
+          await store.appendJournal(input.sessionId, {
+            at: timestamp(),
+            event: "ROLLBACK_ACTION",
+            detail: `${result.kind}:${result.resourceId}:${result.outcome}:${result.reason}`,
+          }, secrets);
         }
         const partial = rollbackResults.some((result) => result.outcome === "failed");
         receipt.rollback = { status: partial ? "partial" : "full", resources: rollbackResults };
-        receipt.completedAt = now().toISOString();
+        receipt.completedAt = timestamp();
         await store.writeReceipt(receipt, secrets);
         const terminal = partial ? "ROLLBACK_PARTIAL" : "ROLLED_BACK";
-        transitionRecord(record, terminal, receipt.completedAt);
-        record.requiresCredential = false;
         record.blocker = partial
           ? { code: "ROLLBACK_PARTIAL", message: "Rollback left resources that require manual reconciliation" }
           : undefined;
-        await store.writeSession(record, secrets);
-        await store.appendJournal(input.sessionId, {
-          at: receipt.completedAt,
-          event: "STATE_TRANSITION",
-          from: "ROLLING_BACK",
-          to: terminal,
-          detail: partial ? "One or more fingerprint/ownership checks failed" : "All owned changes were reverted",
-        }, secrets);
+        await writeTransition(record, terminal, receipt.completedAt, secrets, partial
+          ? "One or more fingerprint/ownership checks failed"
+          : "All owned changes were reverted");
         await store.releaseLock(input.sessionId);
         lockHeld = false;
-        return (await getSnapshot(input.sessionId))!;
+        return snapshotOrThrow(input.sessionId);
       } finally {
         credentialCache.delete(input.sessionId);
-        if (lockHeld) await store.releaseLock(input.sessionId).catch(() => undefined);
+        if (lockHeld) await releaseLockSafely(input.sessionId);
       }
     },
 
@@ -901,10 +572,10 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
       const record = await requireSession(store, input.sessionId);
       if (input.credential === undefined) {
         if (record.status === "COMPLETE" || record.status === "ROLLED_BACK") {
-          return (await getSnapshot(input.sessionId))!;
+          return snapshotOrThrow(input.sessionId);
         }
-        await requireCredentialReentry(store, record, now().toISOString(), "Reconciliation requires a fresh Cloudflare credential");
-        return (await getSnapshot(input.sessionId))!;
+        await requireCredentialReentry(store, record, timestamp(), "Reconciliation requires a fresh Cloudflare credential");
+        return snapshotOrThrow(input.sessionId);
       }
       const credential = input.credential;
       validateCredential(credential);
@@ -914,52 +585,40 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
         await options.cloudflare.verifyCredential({ credential });
         const receipt = await store.readReceipt(input.sessionId);
         if (record.status === "NEEDS_CREDENTIAL_REENTRY" && receipt === undefined) {
+          // The interrupted session had not started mutating anything: restore its pre-lock state.
           const restoredStatus = record.plan === undefined ? "PREFLIGHT" : "WAITING_FOR_CONFIRMATION";
-          transitionRecord(record, restoredStatus, now().toISOString());
+          transitionRecord(record, restoredStatus, timestamp());
           record.requiresCredential = false;
           record.blocker = undefined;
           await store.writeSession(record, secrets);
           if (restoredStatus === "PREFLIGHT") credentialCache.set(input.sessionId, credential);
-          return (await getSnapshot(input.sessionId))!;
+          return snapshotOrThrow(input.sessionId);
         }
         if (record.status === "COMPLETE" || record.status === "ROLLED_BACK") {
-          return (await getSnapshot(input.sessionId))!;
+          return snapshotOrThrow(input.sessionId);
         }
         if (receipt === undefined || record.plan === undefined) {
-          await requireCredentialReentry(store, record, now().toISOString(), "No Apply journal is available to reconcile");
-          return (await getSnapshot(input.sessionId))!;
+          await requireCredentialReentry(store, record, timestamp(), "No Apply journal is available to reconcile");
+          return snapshotOrThrow(input.sessionId);
         }
         if (record.status === "NEEDS_CREDENTIAL_REENTRY") {
-          transitionRecord(record, "NEEDS_RECONCILIATION", now().toISOString());
+          transitionRecord(record, "NEEDS_RECONCILIATION", timestamp());
         }
-        const plan = record.plan;
-        const tunnelReceipt = receipt.resources.find((resource) => resource.kind === "tunnel");
-        const dnsReceipt = receipt.resources.find((resource) => resource.kind === "dns");
-        const serviceReceipt = receipt.resources.find((resource) => resource.kind === "cloudflared");
-        const tunnels = await collectPages((page) =>
-          options.cloudflare.listTunnels({ credential, accountId: plan.account.id, name: plan.actions.find((action) => action.kind === "tunnel")!.name, page, perPage: 50 }),
-        );
-        const tunnel = tunnels.find((candidate) => candidate.id === tunnelReceipt?.resourceId);
-        const desiredConfig = desiredTunnelConfig(await requireManifest(store, input.sessionId));
-        const currentConfig = tunnel === undefined
-          ? undefined
-          : await options.cloudflare.readTunnelConfig({ credential, accountId: plan.account.id, tunnelId: tunnel.id });
-        const records = await collectPages((page) =>
-          options.cloudflare.listDnsRecords({ credential, zoneId: plan.zone.id, name: (plan.actions.find((action) => action.kind === "dns")!).name, page, perPage: 50 }),
-        );
-        const dns = records.find((candidate) => candidate.id === dnsReceipt?.resourceId);
-        const service = await options.cloudflared.inspect();
-        const resourcesMatch =
-          tunnel !== undefined &&
-          currentConfig !== undefined &&
-          fingerprint(currentConfig) === fingerprint(desiredConfig) &&
-          dns !== undefined &&
-          dns.content === `${tunnel.id}.cfargotunnel.com` &&
-          dns.proxied === true &&
-          service.serviceInstalled &&
-          service.serviceId === serviceReceipt?.resourceId;
-        if (resourcesMatch) {
-          const tunnelHealth = await options.cloudflare.verifyTunnelHealth({ credential, accountId: plan.account.id, tunnelId: tunnel.id });
+        const { tunnel, dns, service, resourcesMatch } = await inspectRemoteResources({
+          store,
+          cloudflare: options.cloudflare,
+          cloudflared: options.cloudflared,
+          sessionId: input.sessionId,
+          credential,
+          plan: record.plan,
+          receipt,
+        });
+        if (resourcesMatch && tunnel !== undefined && dns !== undefined) {
+          const tunnelHealth = await options.cloudflare.verifyTunnelHealth({
+            credential,
+            accountId: record.plan.account.id,
+            tunnelId: tunnel.id,
+          });
           const serviceHealth = await options.cloudflared.verify({ serviceId: service.serviceId! });
           receipt.verification = [
             { check: "tunnel_health", passed: tunnelHealth.healthy, checkedAt: tunnelHealth.checkedAt },
@@ -967,11 +626,11 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
           ];
           if (tunnelHealth.healthy && serviceHealth.healthy) {
             const from = record.status;
-            if (from !== "VERIFYING") transitionRecord(record, "VERIFYING", now().toISOString());
-            transitionRecord(record, "COMPLETE", now().toISOString());
+            if (from !== "VERIFYING") transitionRecord(record, "VERIFYING", timestamp());
+            transitionRecord(record, "COMPLETE", timestamp());
             record.requiresCredential = false;
             record.blocker = undefined;
-            receipt.completedAt = now().toISOString();
+            receipt.completedAt = timestamp();
             await store.writeReceipt(receipt, secrets);
             await store.writeSession(record, secrets);
             await store.appendJournal(input.sessionId, {
@@ -981,24 +640,24 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
               to: "COMPLETE",
               detail: "Remote resources match the non-secret journal",
             }, secrets);
-            return (await getSnapshot(input.sessionId))!;
+            return snapshotOrThrow(input.sessionId);
           }
         }
         const from = record.status;
         if (from === "APPLYING" || from === "VERIFYING") {
-          transitionRecord(record, "NEEDS_RECONCILIATION", now().toISOString());
+          transitionRecord(record, "NEEDS_RECONCILIATION", timestamp());
         }
         record.requiresCredential = true;
         record.blocker = { code: "RECONCILIATION_REQUIRED", message: "Remote resources do not match the Apply journal; no writes were attempted" };
         await store.writeSession(record, secrets);
         await store.appendJournal(input.sessionId, {
-          at: now().toISOString(),
+          at: timestamp(),
           event: "RECONCILED",
           from,
           to: "NEEDS_RECONCILIATION",
           detail: record.blocker.message,
         }, secrets);
-        return (await getSnapshot(input.sessionId))!;
+        return snapshotOrThrow(input.sessionId);
       } finally {
         if ((await store.readSession(input.sessionId))?.status !== "PREFLIGHT") {
           credentialCache.delete(input.sessionId);
@@ -1018,13 +677,485 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
         await requireCredentialReentry(
           store,
           record,
-          now().toISOString(),
+          timestamp(),
           "The in-memory Cloudflare credential was explicitly discarded",
         );
       }
     },
   };
 }
+
+// =============================================================================
+// Apply pipeline: one function per resource, in apply order
+// =============================================================================
+
+interface ApplyContext {
+  store: SetupStore;
+  cloudflare: CloudflareAdapter;
+  cloudflared: CloudflaredAdapter;
+  sessionId: string;
+  record: SetupSessionRecord;
+  manifest: SetupManifest;
+  plan: SetupPlan;
+  credential: CloudflareCredential;
+  secrets: readonly string[];
+  receipt: SetupReceipt;
+  /** Returns a fresh timestamp (keeps journal timestamps distinct per write). */
+  at: () => string;
+}
+
+/** Marks the account and zone as untouched prerequisites in the receipt. */
+function applyAccountAndZoneMarkers(ctx: ApplyContext): void {
+  for (const kind of ["account", "zone"] as const) {
+    const action = requireAction(ctx.plan, kind);
+    ctx.receipt.resources.push(toReceiptResource(action, action.resourceId!, false, action.desiredFingerprint));
+  }
+}
+
+/** Creates or reuses the Cloudflare tunnel, recording its receipt entry. */
+async function applyTunnel(ctx: ApplyContext): Promise<{ tunnel: CloudflareTunnel; ownedBySession: boolean }> {
+  const { store, cloudflare, sessionId, record, manifest, credential, plan, secrets } = ctx;
+  const action = requireAction(plan, "tunnel");
+  let tunnel: CloudflareTunnel;
+  if (action.classification === "created") {
+    tunnel = await cloudflare.createTunnel({
+      credential,
+      accountId: plan.account.id,
+      name: manifest.tunnelName,
+      idempotencyKey: record.idempotencyKey,
+    });
+  } else {
+    const tunnels = await listTunnels(cloudflare, credential, plan.account.id, manifest.tunnelName);
+    tunnel = tunnels.find((candidate) => candidate.id === action.resourceId) ??
+      failReconciliation("The planned tunnel is no longer present");
+    if (action.beforeFingerprint === undefined || tunnelFingerprint(tunnel) !== action.beforeFingerprint) {
+      failReconciliation("Tunnel identity changed after Dry Run");
+    }
+  }
+  const ownedBySession = action.classification === "created";
+  const tunnelReceipt = toReceiptResource(action, tunnel.id, ownedBySession, tunnelFingerprint(tunnel));
+  ctx.receipt.resources.push(tunnelReceipt);
+  await appendApplyResource(store, sessionId, tunnelReceipt, ctx.at(), secrets);
+  return { tunnel, ownedBySession };
+}
+
+/** Applies the tunnel ingress config: creates, updates, or confirms it is already correct. */
+async function applyTunnelConfig(
+  ctx: ApplyContext,
+  tunnel: CloudflareTunnel,
+  tunnelOwnedBySession: boolean,
+): Promise<{ previousTunnelConfig?: CloudflareTunnelConfig }> {
+  const { store, cloudflare, sessionId, manifest, credential, plan, secrets } = ctx;
+  const action = requireAction(plan, "tunnel_config");
+  const config = desiredTunnelConfig(manifest);
+  const previousTunnelConfig = action.classification === "updated" || action.classification === "untouched"
+    ? await cloudflare.readTunnelConfig({ credential, accountId: plan.account.id, tunnelId: tunnel.id })
+    : undefined;
+  if (
+    action.classification === "updated" &&
+    (previousTunnelConfig === undefined || fingerprint(previousTunnelConfig) !== action.beforeFingerprint)
+  ) {
+    failReconciliation("Tunnel configuration changed after Dry Run");
+  }
+  if (
+    action.classification === "untouched" &&
+    (previousTunnelConfig === undefined || fingerprint(previousTunnelConfig) !== action.desiredFingerprint)
+  ) {
+    failReconciliation("Tunnel configuration no longer matches the Dry Run");
+  }
+  if (action.classification === "created" || action.classification === "updated") {
+    await cloudflare.updateTunnelConfig({
+      credential,
+      accountId: plan.account.id,
+      tunnelId: tunnel.id,
+      config,
+      ...(action.beforeFingerprint === undefined
+        ? {}
+        : { expectedFingerprint: action.beforeFingerprint }),
+    });
+  }
+  const configReceipt = toReceiptResource(action, tunnel.id, tunnelOwnedBySession, fingerprint(config));
+  ctx.receipt.resources.push(configReceipt);
+  await appendApplyResource(
+    store,
+    sessionId,
+    configReceipt,
+    ctx.at(),
+    secrets,
+    previousTunnelConfig === undefined
+      ? undefined
+      : {
+          kind: "tunnel_config",
+          resourceId: tunnel.id,
+          accountId: plan.account.id,
+          previousTunnelConfig,
+          appliedFingerprint: configReceipt.afterFingerprint!,
+        },
+  );
+  return { previousTunnelConfig };
+}
+
+/** Creates, updates, or reuses the CNAME DNS record; returns it with any pre-change value. */
+async function applyDns(
+  ctx: ApplyContext,
+  tunnel: CloudflareTunnel,
+): Promise<{ dns: CloudflareDnsRecord; previousDnsRecord?: CloudflareDnsRecord }> {
+  const { store, cloudflare, sessionId, record, manifest, credential, plan, secrets } = ctx;
+  const action = requireAction(plan, "dns");
+  const desiredDns: Omit<CloudflareDnsRecord, "id" | "zoneId"> = {
+    type: "CNAME",
+    name: manifest.desiredHostname,
+    content: `${tunnel.id}.cfargotunnel.com`,
+    proxied: true,
+    ttl: 1,
+    ownedByToolSpan: true,
+    ownershipKey: record.idempotencyKey,
+  };
+  let dns: CloudflareDnsRecord;
+  let previousDnsRecord: CloudflareDnsRecord | undefined;
+  if (action.classification === "created") {
+    dns = await cloudflare.createDnsRecord({
+      credential,
+      zoneId: plan.zone.id,
+      record: desiredDns,
+      idempotencyKey: record.idempotencyKey,
+    });
+  } else if (action.classification === "updated") {
+    if (action.resourceId === undefined || action.beforeFingerprint === undefined) {
+      throw new Error("Updated DNS plan is missing its precondition");
+    }
+    const currentRecords = await listDnsRecords(cloudflare, credential, plan.zone.id, manifest.desiredHostname);
+    previousDnsRecord = currentRecords.find((candidate) => candidate.id === action.resourceId);
+    if (
+      previousDnsRecord === undefined ||
+      fingerprint(stripDnsIdentity(previousDnsRecord)) !== action.beforeFingerprint
+    ) {
+      failReconciliation("DNS record changed after Dry Run");
+    }
+    dns = await cloudflare.updateOwnedDnsRecord({
+      credential,
+      zoneId: plan.zone.id,
+      recordId: action.resourceId,
+      record: desiredDns,
+      expectedFingerprint: action.beforeFingerprint,
+    });
+  } else {
+    const records = await listDnsRecords(cloudflare, credential, plan.zone.id, manifest.desiredHostname);
+    dns = records.find((candidate) => candidate.id === action.resourceId) ??
+      failReconciliation("The planned DNS record is no longer present");
+    if (fingerprint(stripDnsIdentity(dns)) !== action.desiredFingerprint) {
+      failReconciliation("DNS record no longer matches the Dry Run");
+    }
+  }
+  const dnsReceipt = toReceiptResource(
+    action,
+    dns.id,
+    action.classification === "created",
+    fingerprint(stripDnsIdentity(dns)),
+  );
+  ctx.receipt.resources.push(dnsReceipt);
+  await appendApplyResource(
+    store,
+    sessionId,
+    dnsReceipt,
+    ctx.at(),
+    secrets,
+    previousDnsRecord === undefined
+      ? undefined
+      : {
+          kind: "dns",
+          resourceId: dns.id,
+          zoneId: plan.zone.id,
+          previousDnsRecord,
+          appliedFingerprint: dnsReceipt.afterFingerprint!,
+        },
+  );
+  return { dns, previousDnsRecord };
+}
+
+/** Installs (or confirms) the local cloudflared service, recording its receipt entry. */
+async function applyCloudflared(
+  ctx: ApplyContext,
+  tunnel: CloudflareTunnel,
+): Promise<{ serviceId: string; serviceFingerprint?: string; ownedBySession: boolean }> {
+  const { store, cloudflare, cloudflared, sessionId, manifest, credential, plan, secrets } = ctx;
+  const action = requireAction(plan, "cloudflared");
+  let serviceId = action.resourceId;
+  let serviceFingerprint = action.beforeFingerprint;
+  let serviceOwned = false;
+  if (action.classification === "created") {
+    const runtimeCredential = await cloudflare.getTunnelRuntimeCredential({
+      credential,
+      accountId: plan.account.id,
+      tunnelId: tunnel.id,
+    });
+    let installed: Awaited<ReturnType<CloudflaredAdapter["install"]>>;
+    try {
+      installed = await cloudflared.install({
+        sessionId,
+        tunnelId: tunnel.id,
+        hostname: manifest.desiredHostname,
+        localUrl: manifest.localUrl,
+        runtimeCredential: runtimeCredential.token,
+      });
+    } catch (error) {
+      throw new Error(
+        redactText(
+          error instanceof Error ? error.message : "cloudflared installation failed",
+          [...secrets, runtimeCredential.token],
+        ),
+        { cause: error },
+      );
+    }
+    serviceId = installed.serviceId;
+    serviceFingerprint = installed.serviceFingerprint;
+    serviceOwned = installed.ownedBySession && installed.ownerSessionId === sessionId;
+  }
+  if (serviceId === undefined) {
+    throw new Error("cloudflared service ID is unavailable");
+  }
+  if (action.classification === "reused") {
+    const currentService = await cloudflared.inspect();
+    if (
+      !currentService.serviceInstalled ||
+      currentService.serviceId !== serviceId ||
+      currentService.serviceFingerprint !== serviceFingerprint
+    ) {
+      failReconciliation("cloudflared service changed after Dry Run");
+    }
+  }
+  const cloudflaredReceipt = toReceiptResource(
+    action,
+    serviceId,
+    action.classification === "created" && serviceOwned,
+    serviceFingerprint ?? action.desiredFingerprint,
+  );
+  ctx.receipt.resources.push(cloudflaredReceipt);
+  await appendApplyResource(store, sessionId, cloudflaredReceipt, ctx.at(), secrets);
+  return { serviceId, serviceFingerprint, ownedBySession: serviceOwned };
+}
+
+/** Marks the desktop-side publicBaseUrl update in the receipt (applied atomically by the host). */
+function applyToolspanConfigMarker(ctx: ApplyContext): void {
+  const action = requireAction(ctx.plan, "toolspan_config");
+  ctx.receipt.resources.push(toReceiptResource(action, "publicBaseUrl", false, action.desiredFingerprint));
+}
+
+/** Checks tunnel + service health and records verification evidence in the receipt. */
+async function verifyAppliedResources(
+  ctx: ApplyContext,
+  tunnel: CloudflareTunnel,
+  serviceId: string,
+): Promise<{
+  tunnelHealth: Awaited<ReturnType<CloudflareAdapter["verifyTunnelHealth"]>>;
+  serviceHealth: Awaited<ReturnType<CloudflaredAdapter["verify"]>>;
+}> {
+  const tunnelHealth = await ctx.cloudflare.verifyTunnelHealth({
+    credential: ctx.credential,
+    accountId: ctx.plan.account.id,
+    tunnelId: tunnel.id,
+  });
+  ctx.receipt.verification.push({
+    check: "tunnel_health",
+    passed: tunnelHealth.healthy,
+    checkedAt: tunnelHealth.checkedAt,
+  });
+  const serviceHealth = await ctx.cloudflared.verify({ serviceId });
+  ctx.receipt.verification.push({
+    check: "cloudflared",
+    passed: serviceHealth.healthy,
+    checkedAt: serviceHealth.checkedAt,
+  });
+  return { tunnelHealth, serviceHealth };
+}
+
+// =============================================================================
+// Rollback pipeline
+// =============================================================================
+
+interface RollbackResourceContext {
+  store: SetupStore;
+  cloudflare: CloudflareAdapter;
+  cloudflared: CloudflaredAdapter;
+  sessionId: string;
+  manifest: SetupManifest;
+  credential: CloudflareCredential;
+  secrets: readonly string[];
+  accountId: string;
+  zoneId: string;
+  journal: SetupJournal;
+  at: () => string;
+}
+
+/**
+ * Reverts a single resource this session created or updated.
+ * Throws when the remote state no longer matches the journal (fingerprint/ownership drift);
+ * returns undefined for combinations that need no action (e.g. a config created together
+ * with its tunnel, which disappears when the tunnel is deleted).
+ */
+async function rollbackResource(
+  ctx: RollbackResourceContext,
+  resource: SetupReceiptResource,
+): Promise<SetupRollbackResource | undefined> {
+  const { store, cloudflare, cloudflared, sessionId, manifest, credential, accountId, zoneId, journal } = ctx;
+
+  if (resource.kind === "cloudflared" && resource.classification === "created") {
+    if (!resource.ownedBySession || resource.afterFingerprint === undefined) {
+      throw new Error("cloudflared ownership proof is unavailable");
+    }
+    const status = await cloudflared.inspect();
+    if (
+      status.serviceId !== resource.resourceId ||
+      status.serviceFingerprint !== resource.afterFingerprint ||
+      status.ownedBySession !== true ||
+      status.ownerSessionId !== sessionId
+    ) {
+      throw new Error("cloudflared service fingerprint or ownership changed");
+    }
+    const removed = await cloudflared.uninstallOwnedService({
+      sessionId,
+      serviceId: resource.resourceId,
+      expectedFingerprint: resource.afterFingerprint,
+    });
+    if (!removed.removed) throw new Error("cloudflared service was not removed");
+    return { kind: resource.kind, resourceId: resource.resourceId, outcome: "removed", reason: "Session-owned service removed" };
+  }
+
+  if (resource.kind === "dns") {
+    const records = await listDnsRecords(cloudflare, credential, zoneId, manifest.desiredHostname);
+    const current = records.find((candidate) => candidate.id === resource.resourceId);
+    if (current === undefined || fingerprint(stripDnsIdentity(current)) !== resource.afterFingerprint) {
+      throw new Error("DNS fingerprint changed after Apply");
+    }
+    if (resource.classification === "created") {
+      if (!resource.ownedBySession || cloudflare.deleteOwnedDnsRecord === undefined) {
+        throw new Error("Session-owned DNS delete capability is unavailable");
+      }
+      const deleted = await cloudflare.deleteOwnedDnsRecord({
+        credential,
+        zoneId,
+        recordId: resource.resourceId,
+        expectedFingerprint: resource.afterFingerprint!,
+      });
+      if (!deleted.deleted) throw new Error("DNS record was not deleted");
+      return { kind: resource.kind, resourceId: resource.resourceId, outcome: "removed", reason: "Session-created DNS removed" };
+    }
+    if (resource.classification === "updated") {
+      const previous = findRollbackData(journal, "dns", resource.resourceId)?.previousDnsRecord;
+      if (previous === undefined) throw new Error("DNS restore data is unavailable");
+      await cloudflare.updateOwnedDnsRecord({
+        credential,
+        zoneId,
+        recordId: resource.resourceId,
+        record: stripDnsIdentity(previous),
+        expectedFingerprint: resource.afterFingerprint!,
+      });
+      return { kind: resource.kind, resourceId: resource.resourceId, outcome: "restored", reason: "Owned DNS restored to its non-secret pre-change value" };
+    }
+    return undefined;
+  }
+
+  if (resource.kind === "tunnel_config" && resource.classification === "updated") {
+    const previous = findRollbackData(journal, "tunnel_config", resource.resourceId)?.previousTunnelConfig;
+    if (previous === undefined || resource.afterFingerprint === undefined) {
+      throw new Error("Tunnel config restore data is unavailable");
+    }
+    const current = await cloudflare.readTunnelConfig({ credential, accountId, tunnelId: resource.resourceId });
+    if (current === undefined || fingerprint(current) !== resource.afterFingerprint) {
+      throw new Error("Tunnel config fingerprint changed after Apply");
+    }
+    await cloudflare.updateTunnelConfig({
+      credential,
+      accountId,
+      tunnelId: resource.resourceId,
+      config: previous,
+      expectedFingerprint: resource.afterFingerprint,
+    });
+    return { kind: resource.kind, resourceId: resource.resourceId, outcome: "restored", reason: "Owned tunnel config restored" };
+  }
+
+  if (resource.kind === "tunnel" && resource.classification === "created") {
+    if (!resource.ownedBySession || resource.afterFingerprint === undefined || cloudflare.deleteOwnedTunnel === undefined) {
+      throw new Error("Session-owned tunnel delete capability is unavailable");
+    }
+    const tunnels = await listTunnels(cloudflare, credential, accountId, manifest.tunnelName);
+    const current = tunnels.find((candidate) => candidate.id === resource.resourceId);
+    if (current === undefined || tunnelFingerprint(current) !== resource.afterFingerprint) {
+      throw new Error("Tunnel fingerprint changed after Apply");
+    }
+    const deleted = await cloudflare.deleteOwnedTunnel({
+      credential,
+      accountId,
+      tunnelId: resource.resourceId,
+      expectedFingerprint: resource.afterFingerprint,
+    });
+    if (!deleted.deleted) throw new Error("Tunnel was not deleted");
+    return { kind: resource.kind, resourceId: resource.resourceId, outcome: "removed", reason: "Session-created tunnel removed" };
+  }
+
+  return undefined;
+}
+
+/** Finds the most recent rollback journal data recorded for a given resource. */
+function findRollbackData(
+  journal: SetupJournal,
+  kind: "dns" | "tunnel_config",
+  resourceId: string,
+): SetupJournalEntry["rollbackData"] {
+  return [...journal.entries].reverse().find(
+    (entry) => entry.rollbackData?.kind === kind && entry.rollbackData.resourceId === resourceId,
+  )?.rollbackData;
+}
+
+// =============================================================================
+// Reconciliation helpers
+// =============================================================================
+
+interface ReconcileContext {
+  store: SetupStore;
+  cloudflare: CloudflareAdapter;
+  cloudflared: CloudflaredAdapter;
+  sessionId: string;
+  credential: CloudflareCredential;
+  plan: SetupPlan;
+  receipt: SetupReceipt;
+}
+
+/** Reads the current remote resources and decides whether they still match the Apply journal. */
+async function inspectRemoteResources(ctx: ReconcileContext): Promise<{
+  tunnel: CloudflareTunnel | undefined;
+  dns: CloudflareDnsRecord | undefined;
+  service: Awaited<ReturnType<CloudflaredAdapter["inspect"]>>;
+  resourcesMatch: boolean;
+}> {
+  const { store, cloudflare, cloudflared, sessionId, credential, plan, receipt } = ctx;
+  const tunnelReceipt = receipt.resources.find((resource) => resource.kind === "tunnel");
+  const dnsReceipt = receipt.resources.find((resource) => resource.kind === "dns");
+  const serviceReceipt = receipt.resources.find((resource) => resource.kind === "cloudflared");
+  const tunnels = await listTunnels(cloudflare, credential, plan.account.id, requireAction(plan, "tunnel").name);
+  const tunnel = tunnels.find((candidate) => candidate.id === tunnelReceipt?.resourceId);
+  const desiredConfig = desiredTunnelConfig(await requireManifest(store, sessionId));
+  const currentConfig = tunnel === undefined
+    ? undefined
+    : await cloudflare.readTunnelConfig({ credential, accountId: plan.account.id, tunnelId: tunnel.id });
+  const records = await listDnsRecords(cloudflare, credential, plan.zone.id, requireAction(plan, "dns").name);
+  const dns = records.find((candidate) => candidate.id === dnsReceipt?.resourceId);
+  const service = await cloudflared.inspect();
+  const resourcesMatch =
+    tunnel !== undefined &&
+    currentConfig !== undefined &&
+    fingerprint(currentConfig) === fingerprint(desiredConfig) &&
+    dns !== undefined &&
+    dns.content === `${tunnel.id}.cfargotunnel.com` &&
+    dns.proxied === true &&
+    service.serviceInstalled &&
+    service.serviceId === serviceReceipt?.resourceId;
+  return { tunnel, dns, service, resourcesMatch };
+}
+
+// =============================================================================
+// Planning helpers
+// =============================================================================
 
 async function buildPlan(input: {
   adapter: CloudflareAdapter;
@@ -1171,6 +1302,7 @@ async function locateZone(
   return matches[0];
 }
 
+/** Paginates through a Cloudflare listing until the last page is reached. */
 async function collectPages<T>(
   load: (page: number) => Promise<{ items: T[]; page: number; totalPages: number }>,
 ): Promise<T[]> {
@@ -1181,6 +1313,24 @@ async function collectPages<T>(
     if (result.page >= result.totalPages) return items;
     if (page >= 100) throw new Error("Cloudflare pagination exceeded the safety limit");
   }
+}
+
+function listTunnels(
+  cloudflare: CloudflareAdapter,
+  credential: CloudflareCredential,
+  accountId: string,
+  name: string,
+): Promise<CloudflareTunnel[]> {
+  return collectPages((page) => cloudflare.listTunnels({ credential, accountId, name, page, perPage: 50 }));
+}
+
+function listDnsRecords(
+  cloudflare: CloudflareAdapter,
+  credential: CloudflareCredential,
+  zoneId: string,
+  name: string,
+): Promise<CloudflareDnsRecord[]> {
+  return collectPages((page) => cloudflare.listDnsRecords({ credential, zoneId, name, page, perPage: 50 }));
 }
 
 function desiredTunnelConfig(manifest: SetupManifest): CloudflareTunnelConfig {
@@ -1221,28 +1371,57 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+// =============================================================================
+// Manifest & input validation
+// =============================================================================
+
 function validateManifestDraft(draft: SetupManifestDraft, zoneName: string): void {
-  if (!/^0\.6\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$/u.test(draft.toolSpanVersion)) {
-    throw new Error("Safe Manifest toolSpanVersion must be a 0.6.x version");
-  }
-  if (draft.instanceName.length < 1 || draft.instanceName.length > 80) {
-    throw new Error("Safe Manifest instanceName must contain 1-80 characters");
-  }
+  assertToolSpanVersion(draft.toolSpanVersion);
+  assertLength(draft.instanceName, "instanceName", 1, 80);
   if (draft.expectedToolCount !== 27) throw new Error("Setup requires the exact 27 Tool Contract");
-  const local = new URL(draft.localUrl);
-  if (
-    local.protocol !== "http:" ||
-    !["127.0.0.1", "localhost"].includes(local.hostname) ||
-    local.username !== "" ||
-    local.password !== "" ||
-    local.search !== "" ||
-    local.hash !== "" ||
-    (local.pathname !== "/" && local.pathname !== "")
-  ) {
-    throw new Error("Setup localUrl must be an HTTP loopback URL");
+  assertLoopbackUrl(draft.localUrl, "Setup localUrl must be an HTTP loopback URL");
+  assertPublicUrlsHttps(draft.publicMcpUrl, draft.oauthDiscoveryUrl);
+  assertPublicUrlsUseDesiredHostname(draft.publicMcpUrl, draft.oauthDiscoveryUrl, draft.desiredHostname);
+  assertHostnameUnderZone(draft.desiredHostname, zoneName);
+  assertMcpEndpoint(draft.publicMcpUrl);
+  assertOauthDiscoveryEndpoint(draft.oauthDiscoveryUrl);
+  assertLength(draft.tunnelName, "tunnelName", 1, 100);
+  if (!["existing", "other_registrar", "namesilo_no_referral"].includes(draft.domainChoice)) {
+    throw new Error("Safe Manifest domainChoice is invalid");
   }
-  const publicMcp = new URL(draft.publicMcpUrl);
-  const oauth = new URL(draft.oauthDiscoveryUrl);
+  assertOfficialDocs(draft.officialDocs);
+}
+
+function assertToolSpanVersion(version: string): void {
+  if (!/^0\.7\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$/u.test(version)) {
+    throw new Error("Safe Manifest toolSpanVersion must be a 0.7.x version");
+  }
+}
+
+function assertLength(value: string, label: string, min: number, max: number): void {
+  if (value.length < min || value.length > max) {
+    throw new Error(`Safe Manifest ${label} must contain ${min}-${max} characters`);
+  }
+}
+
+function assertLoopbackUrl(value: string, message: string): void {
+  const url = new URL(value);
+  if (
+    url.protocol !== "http:" ||
+    !["127.0.0.1", "localhost"].includes(url.hostname) ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    (url.pathname !== "/" && url.pathname !== "")
+  ) {
+    throw new Error(message);
+  }
+}
+
+function assertPublicUrlsHttps(publicMcpUrl: string, oauthDiscoveryUrl: string): void {
+  const publicMcp = new URL(publicMcpUrl);
+  const oauth = new URL(oauthDiscoveryUrl);
   if (
     publicMcp.protocol !== "https:" ||
     oauth.protocol !== "https:" ||
@@ -1253,28 +1432,41 @@ function validateManifestDraft(draft: SetupManifestDraft, zoneName: string): voi
   ) {
     throw new Error("Public MCP and OAuth discovery URLs must use HTTPS");
   }
-  if (publicMcp.hostname !== draft.desiredHostname || oauth.hostname !== draft.desiredHostname) {
+}
+
+function assertPublicUrlsUseDesiredHostname(publicMcpUrl: string, oauthDiscoveryUrl: string, desiredHostname: string): void {
+  const publicMcp = new URL(publicMcpUrl);
+  const oauth = new URL(oauthDiscoveryUrl);
+  if (publicMcp.hostname !== desiredHostname || oauth.hostname !== desiredHostname) {
     throw new Error("Public URLs must use the desired hostname");
   }
-  if (draft.desiredHostname !== `mcp.${zoneName}` && !draft.desiredHostname.endsWith(`.${zoneName}`)) {
+}
+
+function assertHostnameUnderZone(desiredHostname: string, zoneName: string): void {
+  if (desiredHostname !== `mcp.${zoneName}` && !desiredHostname.endsWith(`.${zoneName}`)) {
     throw new Error("Desired hostname must belong to the selected zone");
   }
+}
+
+function assertMcpEndpoint(publicMcpUrl: string): void {
+  const publicMcp = new URL(publicMcpUrl);
   if (publicMcp.pathname !== "/mcp" || publicMcp.search !== "" || publicMcp.hash !== "") {
     throw new Error("Public MCP URL must use the exact /mcp endpoint without query or fragment");
   }
+}
+
+function assertOauthDiscoveryEndpoint(oauthDiscoveryUrl: string): void {
+  const oauth = new URL(oauthDiscoveryUrl);
   if (!oauth.pathname.startsWith("/.well-known/") || oauth.search !== "" || oauth.hash !== "") {
     throw new Error("OAuth discovery URL must use an HTTPS /.well-known/ endpoint");
   }
-  if (draft.tunnelName.length < 1 || draft.tunnelName.length > 100) {
-    throw new Error("Safe Manifest tunnelName must contain 1-100 characters");
-  }
-  if (!["existing", "other_registrar", "namesilo_no_referral"].includes(draft.domainChoice)) {
-    throw new Error("Safe Manifest domainChoice is invalid");
-  }
-  if (draft.officialDocs.length < 1 || draft.officialDocs.length > 32) {
+}
+
+function assertOfficialDocs(docs: string[]): void {
+  if (docs.length < 1 || docs.length > 32) {
     throw new Error("Safe Manifest requires 1-32 official docs URLs");
   }
-  for (const doc of draft.officialDocs) {
+  for (const doc of docs) {
     const url = new URL(doc);
     if (
       url.protocol !== "https:" ||
@@ -1298,6 +1490,10 @@ function validateBoundedId(label: "sessionId" | "idempotencyKey", value: string)
     throw new Error(`${label} must contain 8-128 URL-safe identifier characters`);
   }
 }
+
+// =============================================================================
+// Session record & store helpers
+// =============================================================================
 
 function transitionRecord(record: SetupSessionRecord, to: SetupStatus, at: string): void {
   assertTransition(record.status, to);
@@ -1399,7 +1595,7 @@ async function appendApplyResource(
   resource: SetupReceiptResource,
   at: string,
   secrets: readonly string[],
-  rollbackData?: NonNullable<import("./types.js").SetupJournalEntry["rollbackData"]>,
+  rollbackData?: NonNullable<SetupJournalEntry["rollbackData"]>,
 ): Promise<void> {
   await store.appendJournal(sessionId, {
     at,
@@ -1417,7 +1613,7 @@ async function recoverVerifiedStaleLock(
   store: SetupStore,
   inspector: ProcessInspector,
   at: string,
-): Promise<import("./types.js").SetupLock | undefined> {
+): Promise<SetupLock | undefined> {
   const stale = await store.removeVerifiedStaleLock(inspector);
   if (stale === undefined) return undefined;
   const record = await store.readSession(stale.sessionId);

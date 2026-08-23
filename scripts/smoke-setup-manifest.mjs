@@ -15,7 +15,6 @@ const REQUIRED_PACKAGED_FILES = [
   "docs/setup/cloudflare-manual.md",
   "docs/setup/cloudflare-zone-onboarding.md",
   "docs/setup/cloudflare-scoped-token.md",
-  "docs/setup/cloudflare-global-key.md",
   "docs/setup/cloudflared-runtime-credential.md",
   "docs/setup/chatgpt-custom-mcp.md",
   "docs/setup/domains-and-namesilo.md",

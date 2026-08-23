@@ -3,7 +3,6 @@ export const SETUP_JOURNAL_VERSION = "1" as const;
 export const SETUP_MANIFEST_SCHEMA_VERSION = "1.0" as const;
 export const SETUP_RECEIPT_SCHEMA_VERSION = "1" as const;
 export const SETUP_STATE_SCHEMA_VERSION = "1" as const;
-export const GLOBAL_API_KEY_ACKNOWLEDGEMENT = "I UNDERSTAND GLOBAL API KEY ACCESS" as const;
 
 export type SetupStatus =
   | "IDLE"
@@ -112,7 +111,6 @@ export interface SetupReceipt {
 export type SetupBlockerCode =
   | "INVALID_CREDENTIAL"
   | "INSUFFICIENT_CREDENTIAL"
-  | "GLOBAL_KEY_EMAIL_MISMATCH"
   | "ZONE_NOT_FOUND"
   | "ZONE_PENDING"
   | "ZONE_NOT_ACTIVE"

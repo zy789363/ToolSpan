@@ -49,7 +49,6 @@ const SETUP_DOMAIN_CHOICES = new Set([
   "other_registrar",
   "namesilo_no_referral",
 ]);
-const GLOBAL_KEY_ACKNOWLEDGEMENT = "I UNDERSTAND GLOBAL API KEY ACCESS";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -106,20 +105,10 @@ function hasPersonalPath(value: string): boolean {
 
 function isSetupCredential(value: unknown): boolean {
   if (!isRecord(value) || typeof value.kind !== "string") return false;
-  if (value.kind === "api_token") {
-    return hasOnlyKeys(value, ["kind", "token"])
-      && isBoundedString(value.token, 65_536)
-      && value.token.trim() === value.token;
-  }
-  if (value.kind === "global_api_key") {
-    return hasOnlyKeys(value, ["kind", "email", "key", "acknowledgement"])
-      && isBoundedString(value.email, 254)
-      && /^[^\s@]+@[^\s@]+$/u.test(value.email)
-      && isBoundedString(value.key, 65_536)
-      && value.key.trim() === value.key
-      && value.acknowledgement === GLOBAL_KEY_ACKNOWLEDGEMENT;
-  }
-  return false;
+  if (value.kind !== "api_token") return false;
+  return hasOnlyKeys(value, ["kind", "token"])
+    && isBoundedString(value.token, 65_536)
+    && value.token.trim() === value.token;
 }
 
 function isSetupManifest(value: unknown): boolean {

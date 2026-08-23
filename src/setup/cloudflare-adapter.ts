@@ -1,13 +1,4 @@
-import { GLOBAL_API_KEY_ACKNOWLEDGEMENT } from "./types.js";
-
-export type CloudflareCredential =
-  | { kind: "api_token"; token: string }
-  | {
-      kind: "global_api_key";
-      email: string;
-      key: string;
-      acknowledgement: typeof GLOBAL_API_KEY_ACKNOWLEDGEMENT;
-    };
+export type CloudflareCredential = { kind: "api_token"; token: string };
 
 export interface CloudflareRequestContext {
   credential: CloudflareCredential;
@@ -84,14 +75,5 @@ export interface CloudflareAdapter {
 }
 
 export function validateCredential(credential: CloudflareCredential): void {
-  if (credential.kind === "api_token") {
-    if (credential.token.trim().length === 0) throw new Error("Cloudflare API token is required");
-    return;
-  }
-  if (credential.email.trim().length === 0 || credential.key.trim().length === 0) {
-    throw new Error("Cloudflare account email and Global API Key are required");
-  }
-  if (credential.acknowledgement !== GLOBAL_API_KEY_ACKNOWLEDGEMENT) {
-    throw new Error(`Global API Key requires acknowledgement: ${GLOBAL_API_KEY_ACKNOWLEDGEMENT}`);
-  }
+  if (credential.token.trim().length === 0) throw new Error("Cloudflare API token is required");
 }

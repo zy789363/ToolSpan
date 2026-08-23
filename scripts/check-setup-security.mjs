@@ -22,8 +22,8 @@ const TEST_ENVIRONMENT_SECRET_ENV_NAMES = new Set([
   "TOOLSPAN_E2E_CF_GLOBAL_EMAIL",
   "CloudFlareAPIKEY",
 ]);
-const SECRET_VALUE = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\bBearer\s+[A-Za-z0-9._~+/-]{20,}=*|\bsk-[A-Za-z0-9_-]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bxox[baprs]-[A-Za-z0-9-]{20,}|\b(?:CloudFlareAPIKEY|CLOUDFLARE_(?:API_TOKEN|GLOBAL_API_KEY)|TOOLSPAN_E2E_CF_(?:API_TOKEN|GLOBAL_KEY))\s*[=:]\s*["']?[A-Za-z0-9._~+/-]{20,})/iu;
-const FORBIDDEN_DURABLE_FIELD = /^(?:apiToken|globalApiKey|apiKey|authorization|managementCredential|credentialValue|ownerPassword|ownerHash|tunnelToken|tunnelCredential)$/iu;
+const SECRET_VALUE = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\bBearer\s+[A-Za-z0-9._~+/-]{20,}=*|\bsk-[A-Za-z0-9_-]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bxox[baprs]-[A-Za-z0-9-]{20,}|\b(?:CloudFlareAPIKEY|CLOUDFLARE_API_TOKEN|TOOLSPAN_E2E_CF_API_TOKEN)\s*[=:]\s*["']?[A-Za-z0-9._~+/-]{20,})/iu;
+const FORBIDDEN_DURABLE_FIELD = /^(?:apiToken|apiKey|authorization|managementCredential|credentialValue|ownerPassword|ownerHash|tunnelToken|tunnelCredential)$/iu;
 const FORBIDDEN_SHELL = /(?:shell\s*:\s*true|@tauri-apps\/plugin-shell|tauri-plugin-shell|(?:Command::new|spawn)\s*\(\s*["'`](?:cmd|powershell|pwsh|bash|zsh)(?:\.exe)?["'`]|(?:ba)?sh\s+-c\b)/iu;
 const CREDENTIAL_COMMAND_LINE = /(?:spawn|Command::new|\.args?\s*\()[\s\S]{0,400}\b(?:api[_-]?token|global[_-]?(?:api[_-]?)?key|management[_-]?credential|authorization|tunnel[_-]?(?:token|credential))\b/iu;
 const SETUP_PATH = /(?:^|\/)(?:src\/setup|docs\/setup|docs\/prompts|config|schemas|examples|apps\/desktop\/src|apps\/desktop\/src-tauri\/src)(?:\/|$)/u;

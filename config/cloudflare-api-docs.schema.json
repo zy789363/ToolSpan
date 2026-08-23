@@ -56,19 +56,9 @@
     "authModes": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["scopedApiToken", "globalApiKey"],
+      "required": ["scopedApiToken"],
       "properties": {
-        "scopedApiToken": { "$ref": "#/$defs/authMode" },
-        "globalApiKey": {
-          "allOf": [
-            { "$ref": "#/$defs/authMode" },
-            {
-              "type": "object",
-              "required": ["legacy"],
-              "properties": { "legacy": { "const": true } }
-            }
-          ]
-        }
+        "scopedApiToken": { "$ref": "#/$defs/authMode" }
       }
     },
     "runtimeCredentialHolder": { "const": "cloudflared-official-mechanism" },

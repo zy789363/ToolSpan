@@ -229,7 +229,6 @@ fn is_domain_name(domain: &str) -> bool {
 }
 
 fn is_setup_credential(value: &Value) -> bool {
-    const GLOBAL_ACKNOWLEDGEMENT: &str = "I UNDERSTAND GLOBAL API KEY ACCESS";
     let Some(object) = value.as_object() else {
         return false;
     };
@@ -240,29 +239,6 @@ fn is_setup_credential(value: &Value) -> bool {
                     is_bounded_string(token, 65_536)
                         && token.as_str().is_some_and(|text| text.trim() == text)
                 })
-        }
-        Some("global_api_key") => {
-            has_only_keys(object, &["kind", "email", "key", "acknowledgement"])
-                && object.get("email").is_some_and(|email| {
-                    is_bounded_string(email, 254)
-                        && email.as_str().is_some_and(|text| {
-                            if text.chars().any(char::is_whitespace) {
-                                return false;
-                            }
-                            let mut parts = text.split('@');
-                            matches!(
-                                (parts.next(), parts.next(), parts.next()),
-                                (Some(local), Some(domain), None)
-                                    if !local.is_empty() && !domain.is_empty()
-                            )
-                        })
-                })
-                && object.get("key").is_some_and(|key| {
-                    is_bounded_string(key, 65_536)
-                        && key.as_str().is_some_and(|text| text.trim() == text)
-                })
-                && object.get("acknowledgement").and_then(Value::as_str)
-                    == Some(GLOBAL_ACKNOWLEDGEMENT)
         }
         _ => false,
     }

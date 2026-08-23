@@ -43,7 +43,6 @@ SBOM 从根 `package-lock.json`、Desktop 独立 `package-lock.json` 和 `cargo 
 | `E-WIN-01` | Windows Release 必需 | `PASS`；Owner 手工 Tray smoke 与既有 install/lifecycle/process evidence 已绑定当前 MSI/NSIS hash |
 | `E-SIGN-01` | 可选 unsigned | `NOT_CONFIGURED` |
 | `E-CF-TOKEN-01` | one-click Cloudflare claim 前必需 | `PASS`；scoped-token API lifecycle + public HTTPS/OAuth/exact27 + owned cleanup 闭集证据已验证 |
-| `E-CF-GLOBAL-01` | 非 Release 必需 | `EXTERNAL_GATE_PENDING` |
 | `E-CF-WIN-01` | Windows one-click claim 前必需 | `BLOCKED_BY_ENVIRONMENT`；源码工具链就绪（`scripts/cloudflared-service-lifecycle.ps1` + `uninstall-cloudflared-service.ps1` + 静态测试 + `docs/release/windows-cloudflared-service-validation.md`）。2026-08-23 Owner 决定跳过真实 admin VM 验证，同时将 `WINDOWS_ONE_CLICK_VALIDATED` claim 置为 `inactive`（basis=`WINDOWS_SETUP_USES_MANUAL_CLOUDFLARED_ONLY`）——Desktop 实际使用 manual cloudflared adapter，不承诺自动安装 Windows service，故本 gate 不再阻塞 `RELEASE_READY`；若未来重新宣传 Windows one-click cloudflared，必须先恢复 claim active 并补齐验证 |
 | `E-HOST-01` | Release 必需 | `PASS`；Inspector 2.3.0 OAuth/exact 27/read/write/job/read-only rejection 闭集证据已验证 |
 | `E-CODEX-01` | Release 必需 | `PASS`；真实 Codex remote OAuth/exact 27/read/write/job/hash isolation/cleanup proof 已验证 |
@@ -161,7 +160,6 @@ E-GH-01         PASS                    proofValidated=true
 E-WIN-01        PASS                    proofValidated=true
 E-SIGN-01       NOT_CONFIGURED          proofValidated=false
 E-CF-TOKEN-01   PASS                    proofValidated=true
-E-CF-GLOBAL-01  EXTERNAL_GATE_PENDING   proofValidated=false
 E-CF-WIN-01     BLOCKED_BY_ENVIRONMENT  proofValidated=false
 E-HOST-01       PASS                    proofValidated=true
 E-CODEX-01      PASS                    proofValidated=true
@@ -338,7 +336,7 @@ Files changed by this report update:
 - `.toolspan-dev/goal-state.json`
 - `docs/release/release-gates.md`
 
-Exact next external action: required Release gates 与 scoped-token one-click Cloudflare claim 已无 pending。Windows one-click cloudflared service 仍需 disposable admin VM；Affiliate CTA 若继续显示，需提供 exact affiliate ID/coupon 的日期化账号证据，否则移除 referral CTA。Global API Key lifecycle 仍是可选 legacy gate，未获得 Apply 授权。正式 tag/Release 仍须 Maintainer 另行显式批准。
+Exact next external action: required Release gates 与 scoped-token one-click Cloudflare claim 已无 pending。Windows one-click cloudflared service 仍需 disposable admin VM；Affiliate CTA 若继续显示，需提供 exact affiliate ID/coupon 的日期化账号证据，否则移除 referral CTA。正式 tag/Release 仍须 Maintainer 另行显式批准。
 
 ## 2026-08-23 releaseReady 收敛记录
 
@@ -357,11 +355,11 @@ Status: `verify:release` 输出 `PASS / releaseReady=true / exit 0`。
    - Owner 手工托盘确认：托盘图标、右键菜单（Show/Start/Restart/Stop/Copy MCP URL/Open logs/Quit）、Quit 确认框均出现，确认后干净退出。
    - 证据：`.toolspan-dev/evidence/windows-native-smoke-20260823T105236Z.json`，`E-WIN-01.json` 已更新为当前 hash 绑定的 `PASS`（observedAt 2026-08-23T10:55:36Z，7 天时效窗口内）。
 3. `npm run verify:release`（CI=true）最终：deterministic gates 全 PASS（goal:check / core / desktop / setup）、dry-run PASS（83 package files、SBOM 764 组件、secret/personal-path findings 0）、`requiredPending=[]`、`activeConditionalPending=[]`、`externalGatesPromotedWithoutEvidence=0`。evidence：`.toolspan-dev/evidence/release/release-verification-20260823T110143089Z.json`。
-4. `.toolspan-dev/goal-state.json` 已收敛：`stages.release.status=PASS`、`environment.releaseReady=true`、`windowsLastBuiltMsiSha256/NsisSha256` 更新为当前 hash、`windowsNativeSmokeCurrentArtifactVerified=true`、blockers 清空（可选 legacy Global Key Apply 记入 `environment.optionalLegacyGlobalKeyApplyPending=true`）。`goal:check` errors 0、`goal-status` VALID。
+4. `.toolspan-dev/goal-state.json` 已收敛：`stages.release.status=PASS`、`environment.releaseReady=true`、`windowsLastBuiltMsiSha256/NsisSha256` 更新为当前 hash、`windowsNativeSmokeCurrentArtifactVerified=true`、blockers 清空。`goal:check` errors 0、`goal-status` VALID。
 
 Remaining（不阻塞 `RELEASE_READY`）：
 
-- 可选外部验证：`E-CGPT-UI-01`（ChatGPT UI Smoke，connection/OAuth/tool scan 未完成）、`E-CF-GLOBAL-01`（Global Key legacy Apply，等 Owner 确认）。
+- 可选外部验证：`E-CGPT-UI-01`（ChatGPT UI Smoke，connection/OAuth/tool scan 未完成）。
 
 ---
 

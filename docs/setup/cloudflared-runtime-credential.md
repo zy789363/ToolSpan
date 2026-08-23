@@ -2,7 +2,7 @@
 
 Cloudflare 管理凭证和 Tunnel 运行凭证不是一回事：
 
-- 管理凭证（Scoped API Token 或 Global API Key + email）只用于当前 Setup session 的远程管理，必须在完成后丢弃。
+- 管理凭证（Scoped API Token）只用于当前 Setup session 的远程管理，必须在完成后丢弃。
 - Tunnel 运行凭证用于持久连接，只能由官方 `cloudflared` service / credential storage 机制持有。ToolSpan 不保存、不显示完整值，也不把值复制到 config、DB、journal、Prompt、receipt、日志或诊断。
 
 ## 安装与 ownership

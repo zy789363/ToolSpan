@@ -32,7 +32,7 @@ Setup verifier 不调用 `verify:all:source`，子检查也不得回调 `verify:
 
 ```text
 S-LOCK-01          S-STATE-01       S-CRED-01         S-TUNNEL-CRED-01
-S-CF-MANUAL-01     S-CF-ZONE-01     S-CF-TOKEN-01     S-CF-GLOBAL-01
+S-CF-MANUAL-01     S-CF-ZONE-01     S-CF-TOKEN-01
 S-CF-IDEMP-01      S-CF-ROLLBACK-01 S-CGPT-01         S-AGENT-01
 S-DOMAIN-01        S-AFF-01         S-AFF-02          S-ASSET-01
 S-URL-01           S-DIAG-01        S-MOCK-01         S-EXTENV-01
@@ -66,7 +66,7 @@ Requirements passed:
 
 ```text
 S-LOCK-01          S-STATE-01       S-CRED-01         S-TUNNEL-CRED-01
-S-CF-MANUAL-01     S-CF-ZONE-01     S-CF-TOKEN-01     S-CF-GLOBAL-01
+S-CF-MANUAL-01     S-CF-ZONE-01     S-CF-TOKEN-01
 S-CF-IDEMP-01      S-CF-ROLLBACK-01 S-CGPT-01         S-AGENT-01
 S-DOMAIN-01        S-AFF-01         S-AFF-02          S-ASSET-01
 S-URL-01           S-DIAG-01        S-MOCK-01         S-EXTENV-01

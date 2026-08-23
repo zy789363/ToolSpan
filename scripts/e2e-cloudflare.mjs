@@ -127,7 +127,7 @@ function makeBaseEvidence({ clock, id, mode, credentialType }) {
 }
 
 function normalizeCredentialType(value) {
-  return ["SCOPED_API_TOKEN", "GLOBAL_API_KEY", "UNKNOWN"].includes(value) ? value : "UNKNOWN";
+  return ["SCOPED_API_TOKEN", "UNKNOWN"].includes(value) ? value : "UNKNOWN";
 }
 
 function assertEnvironmentName(value, field) {
@@ -298,8 +298,7 @@ async function evidenceSchemaFor(options) {
 }
 
 /**
- * Resolves only the selected credential mode. In Global mode the email is
- * validated before the Key environment property is ever read.
+ * Resolves the scoped-token credential mode only.
  */
 export function resolveCredentialFromEnvironment(cloudflare, environment, sensitiveValues = []) {
   if (cloudflare.credentialType === "UNKNOWN") {
@@ -308,40 +307,19 @@ export function resolveCredentialFromEnvironment(cloudflare, environment, sensit
   if (cloudflare.credentialAvailable !== true) {
     return credentialCheckpoint("CREDENTIAL_LOCAL_ENTRY_REQUIRED", sensitiveValues);
   }
-
-  if (cloudflare.credentialType === "SCOPED_API_TOKEN") {
-    const name = assertEnvironmentName(cloudflare.apiTokenEnv, "API_TOKEN_ENV");
-    const token = readEnvironmentValue(environment, name);
-    registerSensitiveValue(sensitiveValues, token);
-    if (token === null) return credentialCheckpoint("SCOPED_TOKEN_ENV_VALUE_REQUIRED", sensitiveValues);
-    if (token !== token.trim() || token.length < 20 || token.length > 4096) {
-      return credentialCheckpoint("SCOPED_TOKEN_ENV_VALUE_INVALID", sensitiveValues);
-    }
-    return {
-      credential: { kind: "api_token", token },
-      sensitiveValues: [...sensitiveValues],
-    };
+  if (cloudflare.credentialType !== "SCOPED_API_TOKEN") {
+    return credentialCheckpoint("CREDENTIAL_TYPE_SELECTION_REQUIRED", sensitiveValues);
   }
 
-  const emailName = assertEnvironmentName(cloudflare.globalEmailEnv, "GLOBAL_EMAIL_ENV");
-  const email = readEnvironmentValue(environment, emailName);
-  registerSensitiveValue(sensitiveValues, email);
-  if (email === null) {
-    // Do not dereference globalKeyEnv here. This ordering is a security property.
-    return credentialCheckpoint("GLOBAL_KEY_EMAIL_ENV_VALUE_REQUIRED", sensitiveValues);
-  }
-  if (email !== email.trim() || email.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) {
-    return credentialCheckpoint("GLOBAL_KEY_EMAIL_ENV_VALUE_INVALID", sensitiveValues);
-  }
-  const keyName = assertEnvironmentName(cloudflare.globalKeyEnv, "GLOBAL_KEY_ENV");
-  const key = readEnvironmentValue(environment, keyName);
-  registerSensitiveValue(sensitiveValues, key);
-  if (key === null) return credentialCheckpoint("GLOBAL_KEY_ENV_VALUE_REQUIRED", sensitiveValues);
-  if (key !== key.trim() || key.length < 20 || key.length > 4096) {
-    return credentialCheckpoint("GLOBAL_KEY_ENV_VALUE_INVALID", sensitiveValues);
+  const name = assertEnvironmentName(cloudflare.apiTokenEnv, "API_TOKEN_ENV");
+  const token = readEnvironmentValue(environment, name);
+  registerSensitiveValue(sensitiveValues, token);
+  if (token === null) return credentialCheckpoint("SCOPED_TOKEN_ENV_VALUE_REQUIRED", sensitiveValues);
+  if (token !== token.trim() || token.length < 20 || token.length > 4096) {
+    return credentialCheckpoint("SCOPED_TOKEN_ENV_VALUE_INVALID", sensitiveValues);
   }
   return {
-    credential: { kind: "global_api_key", email, key },
+    credential: { kind: "api_token", token },
     sensitiveValues: [...sensitiveValues],
   };
 }
@@ -349,12 +327,7 @@ export function resolveCredentialFromEnvironment(cloudflare, environment, sensit
 function requestHeaders(credential, hasBody) {
   const headers = new Headers({ Accept: "application/json" });
   if (hasBody) headers.set("Content-Type", "application/json");
-  if (credential.kind === "api_token") {
-    headers.set("Authorization", `Bearer ${credential.token}`);
-  } else {
-    headers.set("X-Auth-Email", credential.email);
-    headers.set("X-Auth-Key", credential.key);
-  }
+  headers.set("Authorization", `Bearer ${credential.token}`);
   return headers;
 }
 
@@ -483,15 +456,7 @@ function createCloudflareClient({ credential, fetchImplementation, requestLog, s
 
   return {
     async verifyCredential() {
-      if (credential.kind === "api_token") {
-        await request({ operation: "VERIFY_SCOPED_TOKEN", resourcePath: "/user/tokens/verify" });
-        return;
-      }
-      const envelope = await request({ operation: "VERIFY_GLOBAL_KEY", resourcePath: "/user" });
-      if (typeof envelope.result?.email !== "string"
-        || envelope.result.email.toLowerCase() !== credential.email.toLowerCase()) {
-        throw new RunnerFault("GLOBAL_KEY_EMAIL_MISMATCH", "BLOCKED_BY_EXTERNAL_ACCOUNT");
-      }
+      await request({ operation: "VERIFY_SCOPED_TOKEN", resourcePath: "/user/tokens/verify" });
     },
     listZones(accountId) {
       return pages({

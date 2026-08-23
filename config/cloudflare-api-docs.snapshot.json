@@ -27,12 +27,6 @@
       "recommended": true,
       "headerNames": ["Authorization"],
       "persistSecretValue": false
-    },
-    "globalApiKey": {
-      "recommended": false,
-      "legacy": true,
-      "headerNames": ["X-Auth-Email", "X-Auth-Key"],
-      "persistSecretValue": false
     }
   },
   "runtimeCredentialHolder": "cloudflared-official-mechanism",

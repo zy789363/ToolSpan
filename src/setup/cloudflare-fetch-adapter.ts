@@ -125,17 +125,7 @@ export function createCloudflareFetchAdapter(
 
   return {
     async verifyCredential({ credential, signal }) {
-      if (credential.kind === "api_token") {
-        await request<unknown>({ path: "/user/tokens/verify", credential, signal });
-      } else {
-        const envelope = await request<{ email?: string }>({ path: "/user", credential, signal });
-        if (envelope.result.email?.toLowerCase() !== credential.email.toLowerCase()) {
-          throw new SetupError({
-            code: "GLOBAL_KEY_EMAIL_MISMATCH",
-            message: "Cloudflare Global API Key does not match the supplied account email",
-          });
-        }
-      }
+      await request<unknown>({ path: "/user/tokens/verify", credential, signal });
       return { valid: true };
     },
 
@@ -343,12 +333,7 @@ export function createCloudflareFetchAdapter(
 function requestHeaders(credential: CloudflareCredential, json: boolean): Headers {
   const headers = new Headers({ Accept: "application/json" });
   if (json) headers.set("Content-Type", "application/json");
-  if (credential.kind === "api_token") {
-    headers.set("Authorization", `Bearer ${credential.token}`);
-  } else {
-    headers.set("X-Auth-Email", credential.email);
-    headers.set("X-Auth-Key", credential.key);
-  }
+  headers.set("Authorization", `Bearer ${credential.token}`);
   return headers;
 }
 

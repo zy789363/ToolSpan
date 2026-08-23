@@ -6,7 +6,6 @@ import {
   Cloud,
   ExternalLink,
   FileJson,
-  KeyRound,
   LifeBuoy,
   LockKeyhole,
   RefreshCw,
@@ -41,8 +40,6 @@ import {
   type CommercialSetupContent,
   type GuideSetupContent,
 } from "../lib/setup-content";
-
-const GLOBAL_ACKNOWLEDGEMENT = "I UNDERSTAND GLOBAL API KEY ACCESS";
 
 const PROMPT_FILES = [
   "cloudflare-browser.md",
@@ -107,19 +104,16 @@ function SetupPathChooser({ active, onChange }: { active: SetupPath; onChange(pa
   const paths: Array<{ id: SetupPath; icon: typeof Wrench; badge?: string }> = [
     { id: "guided_manual", icon: Wrench },
     { id: "scoped_api_token", icon: ShieldCheck, badge: t("setup.recommended") },
-    { id: "global_api_key", icon: KeyRound, badge: t("setup.advancedLegacy") },
     { id: "agent_assisted", icon: Bot },
   ];
   const descriptions: Record<SetupPath, string> = {
     guided_manual: t("setup.manualPathDescription"),
     scoped_api_token: t("setup.scopedPathDescription"),
-    global_api_key: t("setup.globalPathDescription"),
     agent_assisted: t("setup.agentPathDescription"),
   };
   const labels: Record<SetupPath, string> = {
     guided_manual: t("setup.manualPath"),
     scoped_api_token: t("setup.scopedPath"),
-    global_api_key: t("setup.globalPath"),
     agent_assisted: t("setup.agentPath"),
   };
   return (
@@ -187,68 +181,28 @@ function DomainChooser({
 }
 
 interface CredentialFieldsProps {
-  mode: "scoped_api_token" | "global_api_key";
   token: string;
-  email: string;
-  globalKey: string;
-  acknowledgement: string;
   disabled: boolean;
   onToken(value: string): void;
-  onEmail(value: string): void;
-  onGlobalKey(value: string): void;
-  onAcknowledgement(value: string): void;
 }
 
-function CredentialFields(props: CredentialFieldsProps) {
+function CredentialFields({ token, disabled, onToken }: CredentialFieldsProps) {
   const { t } = useTranslation();
   return (
     <div className="setup-credential-fields">
-      {props.mode === "scoped_api_token" ? (
-        <label className="field setup-field">
-          <span>{t("setup.tokenLabel")}</span>
-          <input
-            autoComplete="off"
-            disabled={props.disabled}
-            name="setup-session-token"
-            onChange={(event) => props.onToken(event.target.value)}
-            placeholder={t("setup.tokenPlaceholder")}
-            spellCheck={false}
-            type="password"
-            value={props.token}
-          />
-        </label>
-      ) : (
-        <>
-          <div className="security-callout setup-global-warning" role="note">
-            <AlertTriangle aria-hidden="true" size={18} />
-            <strong>{t("setup.globalWarning")}</strong>
-          </div>
-          <div className="two-column setup-credential-pair">
-            <label className="field setup-field">
-              <span>{t("setup.emailLabel")}</span>
-              <input autoComplete="off" disabled={props.disabled} onChange={(event) => props.onEmail(event.target.value)} spellCheck={false} type="email" value={props.email} />
-            </label>
-            <label className="field setup-field">
-              <span>{t("setup.keyLabel")}</span>
-              <input
-                autoComplete="off"
-                disabled={props.disabled}
-                name="setup-session-global-key"
-                onChange={(event) => props.onGlobalKey(event.target.value)}
-                placeholder={t("setup.keyPlaceholder")}
-                spellCheck={false}
-                type="password"
-                value={props.globalKey}
-              />
-            </label>
-          </div>
-          <label className="field setup-field setup-acknowledgement">
-            <span>{t("setup.globalPhraseLabel")}</span>
-            <input autoComplete="off" disabled={props.disabled} onChange={(event) => props.onAcknowledgement(event.target.value)} spellCheck={false} value={props.acknowledgement} />
-            <small>{t("setup.globalPhraseHelp")} <code>{GLOBAL_ACKNOWLEDGEMENT}</code></small>
-          </label>
-        </>
-      )}
+      <label className="field setup-field">
+        <span>{t("setup.tokenLabel")}</span>
+        <input
+          autoComplete="off"
+          disabled={disabled}
+          name="setup-session-token"
+          onChange={(event) => onToken(event.target.value)}
+          placeholder={t("setup.tokenPlaceholder")}
+          spellCheck={false}
+          type="password"
+          value={token}
+        />
+      </label>
       <p className="setup-secret-note"><LockKeyhole aria-hidden="true" size={15} />{t("setup.noRemember")}</p>
     </div>
   );
@@ -433,9 +387,6 @@ export function SetupPage() {
   const [domain, setDomain] = useState("");
   const [hostname, setHostname] = useState("");
   const [token, setToken] = useState("");
-  const [email, setEmail] = useState("");
-  const [globalKey, setGlobalKey] = useState("");
-  const [acknowledgement, setAcknowledgement] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [credentialPreparedForApply, setCredentialPreparedForApply] = useState(false);
@@ -491,9 +442,6 @@ export function SetupPage() {
 
   const clearCredentialFields = () => {
     setToken("");
-    setEmail("");
-    setGlobalKey("");
-    setAcknowledgement("");
   };
 
   useEffect(() => () => {
@@ -537,17 +485,9 @@ export function SetupPage() {
     );
   }
 
-  const credentialMode = path === "global_api_key" ? "global_api_key" : "scoped_api_token";
-  const makeCredential = (): SetupCredential | null => {
-    if (credentialMode === "scoped_api_token") return token.trim() === "" ? null : { kind: "api_token", token };
-    if (email.trim() === "" || globalKey === "" || acknowledgement !== GLOBAL_ACKNOWLEDGEMENT) return null;
-    return { kind: "global_api_key", email: email.trim(), key: globalKey, acknowledgement: GLOBAL_ACKNOWLEDGEMENT };
-  };
+  const makeCredential = (): SetupCredential | null => token.trim() === "" ? null : { kind: "api_token", token };
 
-  const credentialValidationMessage = () => {
-    if (credentialMode === "global_api_key" && acknowledgement !== GLOBAL_ACKNOWLEDGEMENT) return t("setup.phraseRequired");
-    return t("setup.credentialRequired");
-  };
+  const credentialValidationMessage = () => t("setup.credentialRequired");
 
   const runWithCredential = async (operation: "preflight" | "reconcile" | "rollback") => {
     const normalizedDomain = domain.trim().toLowerCase();
@@ -695,7 +635,7 @@ export function SetupPage() {
 
       {path === "guided_manual" ? <ManualTutorial /> : null}
 
-      {path === "scoped_api_token" || path === "global_api_key" ? (
+      {path === "scoped_api_token" ? (
         <>
           <DomainChooser choice={domainChoice} commercial={commercial} onChange={setDomainChoice} snapshot={snapshot} />
           {!recoveryNeeded && credentialEntryNeeded ? <Card>
@@ -705,14 +645,7 @@ export function SetupPage() {
               <label className="field setup-field"><span>{t("setup.hostnameLabel")}</span><input autoComplete="off" disabled={busy || waitingForApply} onChange={(event) => setHostname(event.target.value)} placeholder={t("setup.hostnamePlaceholder")} spellCheck={false} value={hostname} /></label>
             </div>
             <CredentialFields
-              acknowledgement={acknowledgement}
               disabled={busy}
-              email={email}
-              globalKey={globalKey}
-              mode={credentialMode}
-              onAcknowledgement={setAcknowledgement}
-              onEmail={setEmail}
-              onGlobalKey={setGlobalKey}
               onToken={setToken}
               token={token}
             />
@@ -742,10 +675,10 @@ export function SetupPage() {
               <Button disabled={!canGeneratePlan || busy} onClick={() => { void generatePlan(); }}><Route aria-hidden="true" size={15} />{t("setup.generatePlan")}</Button>
               <ConfirmDialog
                 confirmLabel={t("setup.apply")}
-                description={path === "global_api_key" ? t("setup.globalApplyDescription") : t("setup.applyDescription")}
+                description={t("setup.applyDescription")}
                 onCancel={cancelSession}
                 onConfirm={() => { void applyPlan(); }}
-                title={path === "global_api_key" ? t("setup.globalApplyTitle") : t("setup.applyTitle")}
+                title={t("setup.applyTitle")}
                 trigger={<Button disabled={!canApply || busy} variant="primary"><CheckCircle2 aria-hidden="true" size={15} />{t("setup.apply")}</Button>}
               />
             </div>
@@ -759,14 +692,7 @@ export function SetupPage() {
                   <h3>{t("setup.reentryTitle")}</h3>
                   <p>{t("setup.reentryDescription")}</p>
                   <CredentialFields
-                    acknowledgement={acknowledgement}
                     disabled={busy}
-                    email={email}
-                    globalKey={globalKey}
-                    mode={credentialMode}
-                    onAcknowledgement={setAcknowledgement}
-                    onEmail={setEmail}
-                    onGlobalKey={setGlobalKey}
                     onToken={setToken}
                     token={token}
                   />

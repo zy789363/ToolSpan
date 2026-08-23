@@ -14,7 +14,6 @@ export const REQUIRED_SETUP_DOCS = [
   "cloudflare-manual.md",
   "cloudflare-zone-onboarding.md",
   "cloudflare-scoped-token.md",
-  "cloudflare-global-key.md",
   "cloudflared-runtime-credential.md",
   "chatgpt-custom-mcp.md",
   "domains-and-namesilo.md",
@@ -130,10 +129,10 @@ export async function run() {
   validateManual(docs["cloudflare-manual.md"]);
 
   requirePatterns(docs["index.md"], [
-    /Guided Manual/u, /Scoped API Token/u, /Global API Key/u, /Agent-assisted/u,
+    /Guided Manual/u, /Scoped API Token/u, /Agent-assisted/u,
     /不是 MCP Client、Gateway、Agent Runtime 或 Shell/u,
     /PLANNED.*外部副作用.*0/isu,
-    /管理 Token \/ Global Key 不进 config、DB、journal、日志、Prompt、receipt、诊断/u,
+    /管理 Token 不进 config、DB、journal、日志、Prompt、receipt、诊断/u,
   ], "docs/setup/index.md");
   requirePatterns(docs["cloudflare-zone-onboarding.md"], [
     /aiqushi\.top/u,
@@ -155,14 +154,6 @@ export async function run() {
     /第二次运行必须 duplicates = 0/u,
     /NEEDS_CREDENTIAL_REENTRY/u,
   ], "docs/setup/cloudflare-scoped-token.md");
-  requirePatterns(docs["cloudflare-global-key.md"], [
-    /Advanced \/ Legacy/u,
-    /Full Access/u,
-    /无法描述为“最小权限”/u,
-    /I UNDERSTAND GLOBAL API KEY ACCESS/u,
-    /两次明确确认/u,
-    /X-Auth-Email.*X-Auth-Key/isu,
-  ], "docs/setup/cloudflare-global-key.md");
   requirePatterns(docs["cloudflared-runtime-credential.md"], [
     /管理凭证和 Tunnel 运行凭证不是一回事/u,
     /官方 `cloudflared` service \/ credential storage/u,

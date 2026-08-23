@@ -11,7 +11,7 @@ export interface ConfirmPhraseProps {
   confirmLabel?: string;
 }
 
-/** 高风险操作确认短语（v2：Global Key 等） */
+/** 高风险操作确认短语（v2：完整权限类操作） */
 export function ConfirmPhrase({
   phrase,
   onConfirmed,

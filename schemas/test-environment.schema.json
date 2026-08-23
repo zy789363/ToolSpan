@@ -27,9 +27,7 @@
         "zoneStatus",
         "credentialAvailable",
         "credentialType",
-        "apiTokenEnv",
-        "globalEmailEnv",
-        "globalKeyEnv"
+        "apiTokenEnv"
       ],
       "properties": {
         "available": {
@@ -75,17 +73,10 @@
         "credentialType": {
           "enum": [
             "SCOPED_API_TOKEN",
-            "GLOBAL_API_KEY",
             "UNKNOWN"
           ]
         },
         "apiTokenEnv": {
-          "type": "string"
-        },
-        "globalEmailEnv": {
-          "type": "string"
-        },
-        "globalKeyEnv": {
           "type": "string"
         }
       }

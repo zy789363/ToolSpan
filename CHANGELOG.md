@@ -4,6 +4,12 @@ All notable changes to ToolSpan are recorded here. Dates and release links are o
 
 ## [Unreleased]
 
+### Desktop 0.7 · Remove Global API Key
+
+- Removes the Global API Key (legacy) setup path entirely: Core `CloudflareCredential` converges to the single `api_token` kind, the Rust credential vault drops `GlobalApiKey`, and the desktop protocol/schema accepts only `api_token`.
+- Setup Center becomes three paths (Guided Manual / Scoped API Token / Agent-assisted); the Global Key warning, confirmation phrase and second Apply confirmation are gone. Scoped-token Domain/Zone gates are unchanged.
+- Removes `S-CF-GLOBAL-01` and `E-CF-GLOBAL-01` requirements and the `docs/setup/cloudflare-global-key.md` guide; release/setup gate docs and root goal docs are updated accordingly.
+
 ### Added
 
 - ToolSpan Core 0.3 service identity and deterministic configuration resolution.

@@ -163,16 +163,9 @@ export function analyzeSetupCredentialProtocol(schema) {
   const violations = [];
   const add = (code) => violations.push(code);
   const definition = schema?.$defs?.setupCredential;
-  const branches = Array.isArray(definition?.oneOf) ? definition.oneOf : [];
-  const apiToken = branches.find((branch) => branch?.properties?.kind?.const === "api_token");
-  const globalKey = branches.find((branch) => branch?.properties?.kind?.const === "global_api_key");
-  if (branches.length !== 2
-    || !closedCredentialBranch(apiToken, "api_token", ["kind", "token"])
-    || !boundedSecretString(apiToken?.properties?.token)
-    || !closedCredentialBranch(globalKey, "global_api_key", ["kind", "email", "key", "acknowledgement"])
-    || !boundedEmail(globalKey?.properties?.email)
-    || !boundedSecretString(globalKey?.properties?.key)
-    || globalKey?.properties?.acknowledgement?.const !== "I UNDERSTAND GLOBAL API KEY ACCESS") {
+  if (definition?.type !== "object"
+    || !closedCredentialBranch(definition, "api_token", ["kind", "token"])
+    || !boundedSecretString(definition?.properties?.token)) {
     add("SETUP_CREDENTIAL_PROTOCOL_SHAPE_INVALID");
   }
 
@@ -193,7 +186,7 @@ export function analyzeSetupCredentialProtocol(schema) {
         const fieldPath = [...pathSegments, "properties", name].join(".");
         if (name === "credential") credentialPaths.push(fieldPath);
         if (FORBIDDEN_PROTOCOL_SECRET_FIELD.test(name)) forbiddenSecretPaths.push(fieldPath);
-        if ((name === "token" || name === "key") && !fieldPath.startsWith("$defs.setupCredential.oneOf.")) {
+        if ((name === "token" || name === "key") && !fieldPath.startsWith("$defs.setupCredential.")) {
           forbiddenSecretPaths.push(fieldPath);
         }
       }
@@ -251,7 +244,7 @@ export function analyzeDesktopSecurity(files, documents) {
     if (/(?:localStorage|sessionStorage)[\s\S]{0,160}\bpassword\b|\bpassword\b[\s\S]{0,160}(?:localStorage|sessionStorage)/iu.test(file.text)) {
       add("PASSWORD_BROWSER_STORAGE", file.relativePath);
     }
-    if (/\b(?:CloudFlareAPIKEY|CLOUDFLARE_API_TOKEN|CLOUDFLARE_GLOBAL_API_KEY)\b/u.test(file.text)) {
+    if (/\b(?:CloudFlareAPIKEY|CLOUDFLARE_API_TOKEN)\b/u.test(file.text)) {
       add("CLOUDFLARE_CREDENTIAL_IN_V0_4", file.relativePath);
     }
     if (/dangerousRemoteDomainIpcAccess/iu.test(file.text)) add("REMOTE_TAURI_IPC", file.relativePath);
@@ -293,7 +286,7 @@ export function analyzeDesktopSecurity(files, documents) {
     }
   }
   const protocolText = JSON.stringify(documents.protocolSchema);
-  if (/"(?:password|passwordPlaintext|secret|apiToken|globalApiKey)"\s*:/iu.test(protocolText)) {
+  if (/"(?:password|passwordPlaintext|secret|apiToken)"\s*:/iu.test(protocolText)) {
     add("SECRET_FIELD_IN_NODE_PROTOCOL", "schemas/desktop-protocol.v1.schema.json");
   }
   if (setupProtocolEnabled && [...methods].some((method) => SETUP_V0_5_PROTOCOL_METHODS.has(method))) {

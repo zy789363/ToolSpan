@@ -51,7 +51,7 @@
       "enum": ["STOP", "DRY_RUN_READY", "RECONCILE_REQUIRED", "APPLY_COMPLETE", "CLEANUP_COMPLETE"]
     },
     "reason": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
-    "credentialType": { "enum": ["SCOPED_API_TOKEN", "GLOBAL_API_KEY", "UNKNOWN"] },
+    "credentialType": { "enum": ["SCOPED_API_TOKEN", "UNKNOWN"] },
     "credentialVerified": { "type": "boolean" },
     "zone": {
       "oneOf": [
@@ -467,7 +467,6 @@
         "operation": {
           "enum": [
             "VERIFY_SCOPED_TOKEN",
-            "VERIFY_GLOBAL_KEY",
             "RESOLVE_ZONE",
             "INSPECT_DNS",
             "INSPECT_TUNNELS",

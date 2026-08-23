@@ -8,7 +8,6 @@ import type {
   JobFilter,
   LogFilter,
   RuntimeSnapshot,
-  SetupCredential,
   SetupSafeManifest,
   SetupSnapshot,
   WorkspaceRoot,
@@ -148,7 +147,6 @@ export function createDemoDesktopAdapter(options: DemoAdapterOptions = {}): Desk
   let snapshot = structuredClone(options.snapshot ?? demoSnapshot);
   let setupSnapshot = structuredClone(options.setupSnapshot ?? demoSetupSnapshot);
   let workspaces = structuredClone(snapshot.workspaces);
-  let setupCredential: SetupCredential | null = null;
 
   async function delay(): Promise<void> {
     if ((options.delayMs ?? 0) > 0) {
@@ -250,9 +248,8 @@ export function createDemoDesktopAdapter(options: DemoAdapterOptions = {}): Desk
       await delay();
       return structuredClone(setupSnapshot);
     },
-    async setSetupCredential(_sessionId, credential) {
+    async setSetupCredential(_sessionId, _credential) {
       await delay();
-      setupCredential = structuredClone(credential);
     },
     async setupPreflight(sessionId, _idempotencyKey, zoneName, manifest: SetupSafeManifest) {
       await delay();
@@ -260,7 +257,7 @@ export function createDemoDesktopAdapter(options: DemoAdapterOptions = {}): Desk
         ...setupSnapshot,
         sessionId,
         phase: "PREFLIGHT",
-        path: setupCredential?.kind === "global_api_key" ? "global_api_key" : "scoped_api_token",
+        path: "scoped_api_token",
         domain: zoneName,
         desiredHostname: manifest.desiredHostname,
         safeManifest: structuredClone(manifest),
@@ -296,7 +293,6 @@ export function createDemoDesktopAdapter(options: DemoAdapterOptions = {}): Desk
         ],
         duplicateCreates: 0,
       };
-      setupCredential = null;
       return structuredClone(setupSnapshot);
     },
     async setupRollback() {
@@ -306,7 +302,6 @@ export function createDemoDesktopAdapter(options: DemoAdapterOptions = {}): Desk
         phase: "ROLLED_BACK",
         rollback: { status: "full", remainingResources: [], manualSteps: [] },
       };
-      setupCredential = null;
       return structuredClone(setupSnapshot);
     },
     async setupReconcile() {
@@ -316,7 +311,6 @@ export function createDemoDesktopAdapter(options: DemoAdapterOptions = {}): Desk
     },
     async discardSetupCredential() {
       await delay();
-      setupCredential = null;
     },
     async onTrayAction() {
       return () => undefined;

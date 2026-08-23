@@ -64,42 +64,6 @@ describe("Cloudflare fetch adapter", () => {
     ]);
   });
 
-  it("uses X-Auth headers for a matching Global API Key account", async () => {
-    const credential = {
-      kind: "global_api_key" as const,
-      email: "owner@example.test",
-      key: "fake-global-key",
-      acknowledgement: "I UNDERSTAND GLOBAL API KEY ACCESS" as const,
-    };
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-      cloudflareResponse({ email: "OWNER@example.test" }),
-    );
-    const adapter = createCloudflareFetchAdapter({ fetch: fetchMock as typeof fetch });
-
-    await expect(adapter.verifyCredential({ credential })).resolves.toEqual({ valid: true });
-    const [, init] = fetchMock.mock.calls[0]!;
-    const headers = init?.headers as Headers;
-    expect(headers.get("X-Auth-Email")).toBe(credential.email);
-    expect(headers.get("X-Auth-Key")).toBe(credential.key);
-    expect(headers.get("Authorization")).toBeNull();
-  });
-
-  it("rejects a Global API Key email mismatch truthfully", async () => {
-    const adapter = createCloudflareFetchAdapter({
-      fetch: vi.fn(async () => cloudflareResponse({ email: "different@example.test" })) as typeof fetch,
-    });
-    await expect(
-      adapter.verifyCredential({
-        credential: {
-          kind: "global_api_key",
-          email: "owner@example.test",
-          key: "fake-global-key",
-          acknowledgement: "I UNDERSTAND GLOBAL API KEY ACCESS",
-        },
-      }),
-    ).rejects.toMatchObject({ code: "GLOBAL_KEY_EMAIL_MISMATCH" });
-  });
-
   it("preserves Cloudflare pagination metadata and query parameters", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
       cloudflareResponse([{ id: "account-2", name: "Second" }], {

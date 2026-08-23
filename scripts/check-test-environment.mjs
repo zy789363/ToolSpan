@@ -13,7 +13,7 @@ const TOP_LEVEL_KEYS = [
 const NESTED_KEYS = {
   cloudflare: [
     "available", "zoneName", "preferredHostname", "zoneId", "accountId", "zoneStatus",
-    "credentialAvailable", "credentialType", "apiTokenEnv", "globalEmailEnv", "globalKeyEnv",
+    "credentialAvailable", "credentialType", "apiTokenEnv",
   ],
   browserAutomation: [
     "chromeAuthorized", "computerUseAuthorized", "humanCredentialEntryRequired",
@@ -28,12 +28,10 @@ const NESTED_KEYS = {
 };
 const BOOLEAN_OR_NULL = new Set([true, false, null]);
 const ZONE_STATUSES = new Set(["UNKNOWN", "INITIALIZING", "PENDING", "ACTIVE", "MOVED", "NOT_FOUND"]);
-const CREDENTIAL_TYPES = new Set(["SCOPED_API_TOKEN", "GLOBAL_API_KEY", "UNKNOWN"]);
+const CREDENTIAL_TYPES = new Set(["SCOPED_API_TOKEN", "UNKNOWN"]);
 const ENVIRONMENT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 const ENVIRONMENT_REFERENCES = {
   apiTokenEnv: new Set(["TOOLSPAN_E2E_CF_API_TOKEN"]),
-  globalEmailEnv: new Set(["TOOLSPAN_E2E_CF_GLOBAL_EMAIL"]),
-  globalKeyEnv: new Set(["CloudFlareAPIKEY"]),
 };
 const CLOUDFLARE_ID = /^[a-f0-9]{32}$/iu;
 const SECRET_VALUE = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\bBearer\s+[A-Za-z0-9._~+/-]{16,}|\bBasic\s+[A-Za-z0-9+/]{20,}=*|\bsk-[A-Za-z0-9_-]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bxox[baprs]-[A-Za-z0-9-]{20,}|\bAIza[0-9A-Za-z_-]{30,}|[a-z][a-z0-9+.-]*:\/\/[^\s/:]+:[^\s/@]+@)/iu;
@@ -76,7 +74,7 @@ function environmentReference(value, field, location, errors) {
 
 function secretValueCount(value, location = "testEnvironment") {
   if (typeof value === "string") {
-    if (/\.(?:apiTokenEnv|globalEmailEnv|globalKeyEnv)$/u.test(location)) return 0;
+    if (/\.(?:apiTokenEnv)$/u.test(location)) return 0;
     return SECRET_VALUE.test(value) ? 1 : 0;
   }
   if (Array.isArray(value)) return value.reduce((total, item, index) => total + secretValueCount(item, `${location}[${index}]`), 0);
@@ -141,7 +139,7 @@ export function analyzeTestEnvironment(manifest, schema) {
   if (!CREDENTIAL_TYPES.has(cloudflare.credentialType)) {
     errors.push("testEnvironment.cloudflare.credentialType:INVALID_TYPE");
   }
-  for (const field of ["apiTokenEnv", "globalEmailEnv", "globalKeyEnv"]) {
+  for (const field of ["apiTokenEnv"]) {
     environmentReference(cloudflare[field], field, `testEnvironment.cloudflare.${field}`, errors);
   }
 
@@ -176,7 +174,7 @@ export function analyzeTestEnvironment(manifest, schema) {
   if (host.writeE2eRequired !== true) errors.push("testEnvironment.secondaryHost.writeE2eRequired:EXPECTED_TRUE");
 
   let secretValues = secretValueCount(manifest);
-  for (const field of ["apiTokenEnv", "globalEmailEnv", "globalKeyEnv"]) {
+  for (const field of ["apiTokenEnv"]) {
     const value = cloudflare[field];
     if (typeof value === "string" && !ENVIRONMENT_REFERENCES[field].has(value) && value.length >= 16) {
       secretValues += 1;

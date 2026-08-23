@@ -42,8 +42,6 @@ test("desktop npm orchestration always executes a resolved npm CLI without a she
     PATH: "safe",
     CloudFlareAPIKEY: "must-not-reach-child",
     NPM_TOKEN: "also-secret",
-    TOOLSPAN_E2E_CF_GLOBAL_EMAIL: "fixture-email",
-    TOOLSPAN_E2E_CF_GLOBAL_KEY: "fixture-global-key",
     TOOLSPAN_E2E_CF_API_TOKEN: "fixture-api-token",
   };
   assert.deepEqual(verificationEnvironment(original), { PATH: "safe" });
@@ -142,7 +140,7 @@ test("Tauri shipping resources can start the fixed Desktop host and answer syste
   assert.equal(response.id, "1");
   assert.equal(response.ok, true);
   assert.equal(response.result.protocolVersion, 1);
-  assert.equal(response.result.productVersion, "0.6.0");
+  assert.equal(response.result.productVersion, "0.7.0");
   assert.equal(FIXED_DESKTOP_HOST_RESOURCE, "desktop-host/main.js");
 });
 

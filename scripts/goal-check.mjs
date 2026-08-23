@@ -40,7 +40,6 @@ const PLACEHOLDER_COMMAND = /(?:\.\.\.|<[^>]+>|\b(?:TODO|TBD|FIXME|placeholder|n
 const TRIVIAL_COMMAND = /^(?:echo\b|true$|exit\s+0$)/iu;
 const ENVIRONMENT_VARIABLE_NAME = /^[A-Z][A-Z0-9_]*$/u;
 const KNOWN_SECRET_VALUE = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\bBearer\s+[A-Za-z0-9._~+/-]+=*|\bBasic\s+[A-Za-z0-9+/]+=*|\bsk-[A-Za-z0-9_-]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\bxox[baprs]-[A-Za-z0-9-]{20,}|\bAIza[0-9A-Za-z_-]{30,}|[a-z][a-z0-9+.-]*:\/\/[^\s/:]+:[^\s/@]+@)/iu;
-const CLOUDFLARE_GLOBAL_KEY_VALUE = /\bcfk_[A-Za-z0-9_-]{40,}\b/u;
 
 function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -189,7 +188,6 @@ export function findSecretLikeState(document) {
       return;
     }
     if (typeof value !== "string") return;
-    if (CLOUDFLARE_GLOBAL_KEY_VALUE.test(value)) findings.push(`${location}: CLOUDFLARE_GLOBAL_KEY`);
     else if (KNOWN_SECRET_VALUE.test(value)) findings.push(`${location}: KNOWN_SECRET_VALUE`);
     else if (looksHighEntropy(value)) findings.push(`${location}: HIGH_ENTROPY_VALUE`);
     if (fieldMayContainSecret(parentKey) && value.length > 0 && !ENVIRONMENT_VARIABLE_NAME.test(value)) {

@@ -17,7 +17,6 @@ export const RELEASE_GATE_MATRIX = [
   { id: "E-WIN-01", required: true, allowed: ["PASS", "EXTERNAL_GATE_PENDING", "BLOCKED_BY_ENVIRONMENT"], fallback: "EXTERNAL_GATE_PENDING" },
   { id: "E-SIGN-01", required: false, allowed: ["PASS", "NOT_CONFIGURED"], fallback: "NOT_CONFIGURED" },
   { id: "E-CF-TOKEN-01", required: "ONE_CLICK_CLOUDFLARE_VALIDATED", allowed: ["PASS", "EXTERNAL_GATE_PENDING"], fallback: "EXTERNAL_GATE_PENDING" },
-  { id: "E-CF-GLOBAL-01", required: false, allowed: ["PASS", "NOT_CONFIGURED", "EXTERNAL_GATE_PENDING"], fallback: "NOT_CONFIGURED" },
   { id: "E-CF-WIN-01", required: "WINDOWS_ONE_CLICK_VALIDATED", allowed: ["PASS", "EXTERNAL_GATE_PENDING", "BLOCKED_BY_ENVIRONMENT"], fallback: "BLOCKED_BY_ENVIRONMENT" },
   { id: "E-HOST-01", required: true, allowed: ["PASS", "FAIL"], fallback: "FAIL" },
   { id: "E-CODEX-01", required: true, allowed: ["PASS", "EXTERNAL_GATE_PENDING"], fallback: "EXTERNAL_GATE_PENDING" },
@@ -34,7 +33,6 @@ export const RELEASE_GATE_MAX_AGE_DAYS = Object.freeze({
   "E-WIN-01": 7,
   "E-SIGN-01": 30,
   "E-CF-TOKEN-01": 7,
-  "E-CF-GLOBAL-01": 7,
   "E-CF-WIN-01": 30,
   "E-HOST-01": 7,
   "E-CODEX-01": 7,
@@ -253,7 +251,7 @@ function validateCloudflareLifecycleProof(proof, gateId) {
     "applyStatus", "secondRunDuplicateCreates", "publicEndpoint", "publicHealthPassed",
     "oauthDiscoveryPassed", "publicToolCount", "ownedCleanupPassed",
   ])) return false;
-  const expectedCredentialType = gateId === "E-CF-TOKEN-01" ? "SCOPED_API_TOKEN" : "GLOBAL_API_KEY";
+  const expectedCredentialType = "SCOPED_API_TOKEN";
   let endpoint;
   try {
     endpoint = new URL(proof.publicEndpoint);
@@ -440,8 +438,7 @@ function validateGateProof(gate, proof, options) {
     case "E-GH-01": return validateGitHubProof(proof);
     case "E-WIN-01": return validateWindowsNativeProof(proof, options.currentReleaseContext);
     case "E-SIGN-01": return validateSigningProof(proof, options.currentReleaseContext);
-    case "E-CF-TOKEN-01":
-    case "E-CF-GLOBAL-01": return validateCloudflareLifecycleProof(proof, gate.id);
+    case "E-CF-TOKEN-01": return validateCloudflareLifecycleProof(proof, gate.id);
     case "E-CF-WIN-01": return validateCloudflaredWindowsProof(proof, options.currentReleaseContext);
     case "E-HOST-01": return validateInspectorProof(proof);
     case "E-CODEX-01": return validateCodexProof(proof);

@@ -11,10 +11,9 @@ runner 读取 gitignored 的 `.toolspan-dev/test-environment.json`，只把 mani
 支持的显式模式：
 
 - `SCOPED_API_TOKEN`：只读取 `apiTokenEnv` 指向的环境变量；
-- `GLOBAL_API_KEY`：先读取 `globalEmailEnv`；email 缺失时立即返回 checkpoint，连 Key 环境属性也不解引用。email 有效后才读取 `globalKeyEnv`；
 - `UNKNOWN`：返回 `NEEDS_HUMAN_CHECKPOINT / CREDENTIAL_TYPE_SELECTION_REQUIRED`，绝不根据字符串猜类型。
 
-Secret 必须由 Owner 在本地系统设置或 masked UI 中输入。不要把值发到聊天，也不要在命令行中赋值。当前 Owner 使用 Global Key 时，Key 环境变量名可为 `CloudFlareAPIKEY`；仍必须在 manifest 的 `globalEmailEnv` 所指本地环境变量中提供 account email。
+Secret 必须由 Owner 在本地系统设置或 masked UI 中输入。不要把值发到聊天，也不要在命令行中赋值。
 
 ## 默认只读 preflight
 

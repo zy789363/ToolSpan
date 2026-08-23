@@ -128,7 +128,6 @@ export interface FirstRunInput {
 export type SetupPath =
   | "guided_manual"
   | "scoped_api_token"
-  | "global_api_key"
   | "agent_assisted";
 
 export type SetupPhase =
@@ -219,9 +218,7 @@ export interface SetupSnapshot {
   lastErrorCode: string | null;
 }
 
-export type SetupCredential =
-  | { kind: "api_token"; token: string }
-  | { kind: "global_api_key"; email: string; key: string; acknowledgement: string };
+export type SetupCredential = { kind: "api_token"; token: string };
 
 export interface DesktopAdapter {
   getSnapshot(): Promise<RuntimeSnapshot>;

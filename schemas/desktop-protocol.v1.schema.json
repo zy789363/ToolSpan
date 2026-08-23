@@ -192,34 +192,19 @@
       "pattern": "^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
     },
     "setupCredential": {
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "kind": { "const": "api_token" },
-            "token": { "type": "string", "minLength": 1, "maxLength": 65536 }
-          },
-          "required": ["kind", "token"],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "kind": { "const": "global_api_key" },
-            "email": { "type": "string", "format": "email", "minLength": 3, "maxLength": 254 },
-            "key": { "type": "string", "minLength": 1, "maxLength": 65536 },
-            "acknowledgement": { "const": "I UNDERSTAND GLOBAL API KEY ACCESS" }
-          },
-          "required": ["kind", "email", "key", "acknowledgement"],
-          "additionalProperties": false
-        }
-      ]
+      "type": "object",
+      "properties": {
+        "kind": { "const": "api_token" },
+        "token": { "type": "string", "minLength": 1, "maxLength": 65536 }
+      },
+      "required": ["kind", "token"],
+      "additionalProperties": false
     },
     "setupManifest": {
       "type": "object",
       "properties": {
         "schemaVersion": { "const": "1.0" },
-        "toolSpanVersion": { "type": "string", "pattern": "^0\\.6\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
+        "toolSpanVersion": { "type": "string", "pattern": "^0\\.7\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
         "instanceName": { "type": "string", "minLength": 1, "maxLength": 80 },
         "localUrl": {
           "type": "string",

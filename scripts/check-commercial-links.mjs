@@ -248,11 +248,9 @@ export function validateCloudflareSnapshot(value) {
   if (value.zoneApplyGate.requiredStatus !== "active" || value.zoneApplyGate.missingResult !== "STOP_APPLY" || value.zoneApplyGate.pendingResult !== "STOP_APPLY") {
     fail("cloudflareSnapshot Zone gate must stop missing/pending and require active");
   }
-  exactKeys(value.authModes, ["scopedApiToken", "globalApiKey"], "cloudflareSnapshot.authModes");
+  exactKeys(value.authModes, ["scopedApiToken"], "cloudflareSnapshot.authModes");
   exactKeys(value.authModes.scopedApiToken, ["recommended", "headerNames", "persistSecretValue"], "cloudflareSnapshot.authModes.scopedApiToken");
-  exactKeys(value.authModes.globalApiKey, ["recommended", "legacy", "headerNames", "persistSecretValue"], "cloudflareSnapshot.authModes.globalApiKey");
   if (value.authModes.scopedApiToken.recommended !== true || value.authModes.scopedApiToken.persistSecretValue !== false) fail("scoped Token mode boundary is invalid");
-  if (value.authModes.globalApiKey.recommended !== false || value.authModes.globalApiKey.legacy !== true || value.authModes.globalApiKey.persistSecretValue !== false) fail("Global Key legacy boundary is invalid");
   if (value.runtimeCredentialHolder !== "cloudflared-official-mechanism") fail("runtime credential holder boundary is invalid");
   string(value.fallbackText, "cloudflareSnapshot.fallbackText");
   return value;
