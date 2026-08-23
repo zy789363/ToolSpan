@@ -339,3 +339,28 @@ Files changed by this report update:
 - `docs/release/release-gates.md`
 
 Exact next external action: required Release gates 与 scoped-token one-click Cloudflare claim 已无 pending。Windows one-click cloudflared service 仍需 disposable admin VM；Affiliate CTA 若继续显示，需提供 exact affiliate ID/coupon 的日期化账号证据，否则移除 referral CTA。Global API Key lifecycle 仍是可选 legacy gate，未获得 Apply 授权。正式 tag/Release 仍须 Maintainer 另行显式批准。
+
+## 2026-08-23 releaseReady 收敛记录
+
+Stage: `RELEASE_GATES` → `RELEASE_READY`（自动门禁收敛，正式 tag/Release 仍待 Maintainer）
+
+Status: `verify:release` 输出 `PASS / releaseReady=true / exit 0`。
+
+收敛过程（本机）：
+
+1. 修复本地环境缺口：本机 PATH 缺少 ripgrep，Core files 测试 `spawn rg ENOENT`。将官方 ripgrep 15.0.0（经 `@vscode/ripgrep-win32-x64` 获取，SHA 校验后）放入已忽略的 `.toolspan-dev/bin/rg.exe` 并复制至 PATH 内 node 目录；files 测试 12/12 PASS。CI 环境无此问题（workflow 已安装 ripgrep）。
+2. 重新构建后的 native artifact（MSI `3868cbbc…`、NSIS `22cd1b95…`）使旧 E-WIN-01 证据 hash 绑定失效。对当前 artifact 重新执行 Windows native smoke：
+   - NSIS per-user 安装存在（`C:\Users\86799\AppData\Local\ToolSpan`，含 desktop-host bundle 与 uninstaller）；
+   - 启动 smoke：窗口 Title=`ToolSpan`、Responding=true；
+   - owned child（msedgewebview2 + node Desktop Host）在退出后清理为 0；
+   - 无关 node 进程在 ToolSpan 生命周期前后保持存活（隔离有效）；
+   - Owner 手工托盘确认：托盘图标、右键菜单（Show/Start/Restart/Stop/Copy MCP URL/Open logs/Quit）、Quit 确认框均出现，确认后干净退出。
+   - 证据：`.toolspan-dev/evidence/windows-native-smoke-20260823T105236Z.json`，`E-WIN-01.json` 已更新为当前 hash 绑定的 `PASS`（observedAt 2026-08-23T10:55:36Z，7 天时效窗口内）。
+3. `npm run verify:release`（CI=true）最终：deterministic gates 全 PASS（goal:check / core / desktop / setup）、dry-run PASS（83 package files、SBOM 764 组件、secret/personal-path findings 0）、`requiredPending=[]`、`activeConditionalPending=[]`、`externalGatesPromotedWithoutEvidence=0`。evidence：`.toolspan-dev/evidence/release/release-verification-20260823T110143089Z.json`。
+4. `.toolspan-dev/goal-state.json` 已收敛：`stages.release.status=PASS`、`environment.releaseReady=true`、`windowsLastBuiltMsiSha256/NsisSha256` 更新为当前 hash、`windowsNativeSmokeCurrentArtifactVerified=true`、blockers 清空（可选 legacy Global Key Apply 记入 `environment.optionalLegacyGlobalKeyApplyPending=true`）。`goal:check` errors 0、`goal-status` VALID。
+
+Remaining（不阻塞 `RELEASE_READY`）：
+
+- 正式 tag + GitHub Release：Maintainer 显式执行（tagCreated/published 均为 false）。
+- 可选外部验证：`E-CGPT-UI-01`（ChatGPT UI Smoke，connection/OAuth/tool scan 未完成）、`E-CF-GLOBAL-01`（Global Key legacy Apply，等 Owner 确认）。
+- 工作区清理：`apps/desktop/package-lock.json`、`apps/desktop/src/styles.css` 未提交；main 领先 origin 3 个提交未 push。
