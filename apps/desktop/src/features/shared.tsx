@@ -61,3 +61,15 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+export function formatDuration(createdAt: string, finishedAt: string | undefined): string {
+  if (finishedAt === undefined) return "—";
+  const ms = new Date(finishedAt).getTime() - new Date(createdAt).getTime();
+  if (Number.isNaN(ms) || ms < 0) return "—";
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}

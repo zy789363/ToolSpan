@@ -9,7 +9,7 @@ import { PageHeader } from "../components/page-header";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
-import { Select } from "../components/ui/select";
+import { Seg } from "../components/ui/seg";
 import { formatTimestamp, OperationError, TranslatedStatus } from "./shared";
 
 export function LogsPage() {
@@ -27,23 +27,27 @@ export function LogsPage() {
     refetchInterval: paused ? false : 2500,
   });
   const copyValue = useMemo(() => (logs.data ?? []).map((entry) => `${entry.timestamp} ${entry.level.toUpperCase()} [${entry.source}] ${entry.message}`).join("\n"), [logs.data]);
-  const levels: Array<{ label: string; value: string }> = [
-    { label: t("logs.allLevels"), value: "all" },
-    ...(["debug", "info", "warn", "error"] as const).map((value) => ({ label: t(`state.${value}`), value })),
-  ];
 
   return (
     <div className="page-stack">
       <PageHeader
-        actions={<Button onClick={() => setPaused((value) => !value)}>{paused ? <Play aria-hidden="true" size={15} /> : <Pause aria-hidden="true" size={15} />}{paused ? t("common.resume") : t("common.pause")}</Button>}
+        actions={<Button disabled={copyValue === ""} onClick={() => { void navigator.clipboard.writeText(copyValue); }}><ClipboardCopy aria-hidden="true" size={15} />{t("logs.copyVisible")}</Button>}
         description={t("logs.description")}
         eyebrow={t("logs.eyebrow")}
         title={t("logs.title")}
       />
       <div className="filters-row">
+        <Seg<LogLevel | "all">
+          aria-label={t("logs.filterLevel")}
+          onChange={setLevel}
+          options={[
+            { value: "all", label: t("logs.allLevels") },
+            ...(["debug", "info", "warn", "error"] as const).map((value) => ({ label: t(`state.${value}`), value })),
+          ]}
+          value={level}
+        />
         <label className="search-field"><Search aria-hidden="true" size={15} /><span className="sr-only">{t("common.search")}</span><input onChange={(event) => setQuery(event.target.value)} placeholder={t("logs.searchPlaceholder")} type="search" value={query} /></label>
-        <Select ariaLabel={t("logs.filterLevel")} onChange={(value) => setLevel(value as LogLevel | "all")} options={levels} value={level} />
-        <Button disabled={copyValue === ""} onClick={() => { void navigator.clipboard.writeText(copyValue); }}><ClipboardCopy aria-hidden="true" size={15} />{t("logs.copyVisible")}</Button>
+        <Button onClick={() => setPaused((value) => !value)}>{paused ? <Play aria-hidden="true" size={15} /> : <Pause aria-hidden="true" size={15} />}{paused ? t("common.resume") : t("common.pause")}</Button>
       </div>
       <div className="tail-status"><span className={paused ? "tail-dot tail-dot--paused" : "tail-dot"} aria-hidden="true" /><span>{paused ? t("logs.paused") : t("logs.live")}</span><Badge tone="positive"><ShieldCheck aria-hidden="true" size={12} /> {t("logs.sanitized")}</Badge></div>
       {logs.isError ? <OperationError /> : null}

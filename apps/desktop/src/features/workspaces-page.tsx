@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Folder, FolderPlus, LockKeyhole, Trash2 } from "lucide-react";
+import { Folder, FolderPlus, LockKeyhole, Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { useDesktopAdapter } from "../adapters/context";
@@ -8,6 +8,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { ConfirmDialog } from "../components/ui/confirm-dialog";
+import { Notice } from "../components/ui/notice";
 import { OperationError, useRuntimeSnapshot } from "./shared";
 
 export function WorkspacesPage() {
@@ -29,16 +30,19 @@ export function WorkspacesPage() {
         title={t("workspaces.title")}
       />
       {add.isError || remove.isError ? <OperationError /> : null}
-      <Card className="info-strip" tone="accent"><LockKeyhole aria-hidden="true" size={17} /><span>{t("workspaces.addHint")}</span></Card>
-      <div className="workspace-list">
+      <Notice icon={<LockKeyhole aria-hidden="true" size={15} />}>{t("workspaces.addHint")}</Notice>
+      <div className="ws-grid">
         {snapshot.data.workspaces.length === 0 ? (
           <Card className="empty-panel"><Folder aria-hidden="true" size={26} /><p>{t("workspaces.empty")}</p></Card>
         ) : snapshot.data.workspaces.map((workspace) => (
-          <Card className="workspace-card" key={workspace.id}>
-            <div className="workspace-card__icon"><Folder aria-hidden="true" size={20} /></div>
-            <div className="workspace-card__details">
-              <div><h2>{workspace.name}</h2><Badge tone="info">{workspace.access === "read" ? t("workspaces.read") : t("workspaces.readWrite")}</Badge></div>
-              <code>{workspace.path}</code>
+          <Card className="ws-card" key={workspace.id}>
+            <div className="ws-card__icon"><Folder aria-hidden="true" size={20} /></div>
+            <div className="ws-card__body">
+              <div className="ws-card__name">{workspace.name}</div>
+              <code className="ws-card__path">{workspace.path}</code>
+              <div className="ws-card__meta">
+                <Badge tone="info">{workspace.access === "read" ? t("workspaces.read") : t("workspaces.readWrite")}</Badge>
+              </div>
             </div>
             <ConfirmDialog
               confirmLabel={t("common.remove")}
@@ -50,6 +54,16 @@ export function WorkspacesPage() {
             />
           </Card>
         ))}
+        <button
+          aria-label={t("workspaces.add")}
+          className="card ws-card ws-card--add"
+          disabled={add.isPending}
+          onClick={() => add.mutate()}
+          type="button"
+        >
+          <Plus aria-hidden="true" size={22} />
+          {t("workspaces.add")}
+        </button>
       </div>
     </div>
   );

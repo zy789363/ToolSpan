@@ -9,6 +9,7 @@ import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { ConfirmDialog } from "../components/ui/confirm-dialog";
 import { CopyButton } from "../components/ui/copy-button";
+import { Notice } from "../components/ui/notice";
 import { formatBytes, formatTimestamp, OperationError } from "./shared";
 
 export function ArtifactsPage() {
@@ -19,27 +20,61 @@ export function ArtifactsPage() {
     <div className="page-stack">
       <PageHeader description={t("artifacts.description")} eyebrow={t("artifacts.eyebrow")} title={t("artifacts.title")} />
       {artifacts.isError ? <OperationError /> : null}
-      <div className="artifact-grid">
-        {(artifacts.data ?? []).length === 0 ? <Card className="empty-panel"><FileOutput aria-hidden="true" size={26} /><p>{t("artifacts.empty")}</p></Card> : artifacts.data?.map((artifact) => (
-          <Card className="artifact-card" key={artifact.id}>
-            <div className="artifact-card__header"><div className="artifact-icon"><FileOutput aria-hidden="true" size={19} /></div><div><h2>{artifact.name}</h2><p>{artifact.mediaType} · {formatBytes(artifact.sizeBytes)} · {formatTimestamp(artifact.createdAt, i18n.language)}</p></div></div>
-            <div className="artifact-path"><span>{t("artifacts.localPath")}</span><div className="copy-field"><code>{artifact.localPath}</code><CopyButton compact value={artifact.localPath} /></div></div>
-            <div className="artifact-card__footer">
-              <Badge tone={artifact.publicUrl === undefined ? "neutral" : "warning"}>{artifact.publicUrl === undefined ? t("artifacts.noPublic") : t("artifacts.publicLink")}</Badge>
-              {artifact.publicUrl === undefined ? null : (
-                <ConfirmDialog
-                  confirmLabel={t("artifacts.copyPublic")}
-                  description={t("artifacts.exposureDescription")}
-                  onConfirm={() => { void navigator.clipboard.writeText(artifact.publicUrl ?? ""); }}
-                  title={t("artifacts.exposureTitle")}
-                  trigger={<Button size="compact"><Link2 aria-hidden="true" size={14} />{t("artifacts.copyPublic")}</Button>}
-                />
-              )}
-            </div>
-          </Card>
-        ))}
-      </div>
-      <Card className="info-strip" tone="accent"><ShieldAlert aria-hidden="true" size={17} /><span>{t("artifacts.exposureDescription")}</span></Card>
+      <Card>
+        {(artifacts.data ?? []).length === 0 ? (
+          <p className="empty-note">{t("artifacts.empty")}</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th scope="col">{t("artifacts.name")}</th>
+                  <th scope="col">{t("artifacts.type")}</th>
+                  <th scope="col">{t("artifacts.size")}</th>
+                  <th scope="col">{t("artifacts.createdAt")}</th>
+                  <th scope="col">{t("artifacts.link")}</th>
+                  <th className="table__th-actions" scope="col"><span className="sr-only">{t("jobs.actions")}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {artifacts.data?.map((artifact) => (
+                  <tr key={artifact.id}>
+                    <td>
+                      <div className="table__cell-main">
+                        <span className="artifact-icon"><FileOutput aria-hidden="true" size={16} /></span>
+                        <span className="table__mono">{artifact.name}</span>
+                      </div>
+                    </td>
+                    <td className="table__muted">{artifact.mediaType}</td>
+                    <td className="table__muted">{formatBytes(artifact.sizeBytes)}</td>
+                    <td className="table__muted">{formatTimestamp(artifact.createdAt, i18n.language)}</td>
+                    <td>
+                      <Badge tone={artifact.publicUrl === undefined ? "neutral" : "warning"}>
+                        {artifact.publicUrl === undefined ? t("artifacts.noPublic") : t("artifacts.publicLink")}
+                      </Badge>
+                    </td>
+                    <td>
+                      <div className="table__cell-actions">
+                        {artifact.publicUrl === undefined ? null : (
+                          <ConfirmDialog
+                            confirmLabel={t("artifacts.copyPublic")}
+                            description={t("artifacts.exposureDescription")}
+                            onConfirm={() => { void navigator.clipboard.writeText(artifact.publicUrl ?? ""); }}
+                            title={t("artifacts.exposureTitle")}
+                            trigger={<Button size="compact"><Link2 aria-hidden="true" size={14} />{t("artifacts.copyPublic")}</Button>}
+                          />
+                        )}
+                        <CopyButton compact value={artifact.localPath} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+      <Notice icon={<ShieldAlert aria-hidden="true" size={15} />} tone="warn">{t("artifacts.exposureDescription")}</Notice>
     </div>
   );
 }

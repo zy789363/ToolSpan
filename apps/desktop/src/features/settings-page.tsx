@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, MonitorCog, Palette, Save, Settings2 } from "lucide-react";
+import { KeyRound, Monitor, MonitorCog, Moon, Palette, Save, Settings2, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -10,7 +10,7 @@ import { PageHeader } from "../components/page-header";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
-import { Select } from "../components/ui/select";
+import { Seg } from "../components/ui/seg";
 import { OperationError, SectionTitle, useRuntimeSnapshot } from "./shared";
 
 export function SettingsPage() {
@@ -50,8 +50,8 @@ export function SettingsPage() {
           <SectionTitle>{t("settings.appearance")}</SectionTitle>
           <Card className="settings-card">
             <div className="settings-icon"><Palette aria-hidden="true" size={18} /></div>
-            <label className="setting-row"><span><strong>{t("settings.theme")}</strong></span><Select ariaLabel={t("settings.theme")} onChange={(value) => setTheme(value as ThemeMode)} options={[{ value: "light", label: t("settings.light") }, { value: "dark", label: t("settings.dark") }, { value: "system", label: t("settings.system") }]} value={theme} /></label>
-            <label className="setting-row"><span><strong>{t("settings.language")}</strong></span><Select ariaLabel={t("settings.language")} onChange={(value) => { const language = value as AppLanguage; globalThis.localStorage.setItem(LANGUAGE_STORAGE_KEY, language); void i18n.changeLanguage(language); }} options={[{ value: "en", label: t("settings.english") }, { value: "zh-CN", label: t("settings.chinese") }]} value={i18n.language === "zh-CN" ? "zh-CN" : "en"} /></label>
+            <label className="setting-row"><span><strong>{t("settings.theme")}</strong></span><Seg<ThemeMode> aria-label={t("settings.theme")} onChange={setTheme} options={[{ icon: <Sun aria-hidden="true" size={13} />, label: t("settings.light"), value: "light" }, { icon: <Moon aria-hidden="true" size={13} />, label: t("settings.dark"), value: "dark" }, { icon: <Monitor aria-hidden="true" size={13} />, label: t("settings.system"), value: "system" }]} value={theme} /></label>
+            <label className="setting-row"><span><strong>{t("settings.language")}</strong></span><Seg<AppLanguage> aria-label={t("settings.language")} onChange={(language) => { globalThis.localStorage.setItem(LANGUAGE_STORAGE_KEY, language); void i18n.changeLanguage(language); }} options={[{ label: t("settings.english"), value: "en" }, { label: t("settings.chinese"), value: "zh-CN" }]} value={i18n.language === "zh-CN" ? "zh-CN" : "en"} /></label>
             <label className="setting-row setting-row--checkbox"><span><strong>{t("settings.motion")}</strong><small>{t("settings.followsSystem")}</small></span><input checked={motion === "reduce"} onChange={(event) => setMotion(event.target.checked ? "reduce" : "system")} type="checkbox" /><span className="switch" aria-hidden="true" /></label>
           </Card>
         </section>
