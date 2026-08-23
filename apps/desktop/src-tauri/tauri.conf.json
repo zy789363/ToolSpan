@@ -4,7 +4,9 @@
   "version": "0.5.0",
   "identifier": "top.aiqushi.toolspan",
   "build": {
+    "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
   "app": {
