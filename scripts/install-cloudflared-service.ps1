@@ -13,6 +13,30 @@ if (-not $Principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Adm
     throw "Run this script from an elevated PowerShell session"
 }
 
+function Start-CloudflaredService([string]$Name) {
+    # cloudflared 2026.8.2 agent service can hang forever in StopPending when
+    # asked to stop, so avoid Restart-Service. If it is already running, leave it;
+    # otherwise start it with a bounded wait instead of blocking indefinitely.
+    $service = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if ($null -eq $service) {
+        return $false
+    }
+    if ($service.Status -eq "Running") {
+        return $true
+    }
+    $job = Start-Job -ScriptBlock {
+        param($serviceName)
+        Start-Service -Name $serviceName -ErrorAction Stop
+    } -ArgumentList $Name
+    if (-not (Wait-Job -Job $job -Timeout 30)) {
+        Stop-Job -Job $job -ErrorAction SilentlyContinue
+        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+        return $false
+    }
+    Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+    return ((Get-Service -Name $Name -ErrorAction SilentlyContinue).Status -eq "Running")
+}
+
 function Write-CloudflaredOwnership([string]$ServiceName, [string]$CloudflaredSource, [string]$Config) {
     $rand = -join ((48..57) + (97..102) | Get-Random -Count 10 | ForEach-Object { [char]$_ })
     $sessionId = "$(Get-Date -Format yyyyMMdd)-$rand"
@@ -53,6 +77,9 @@ Set-ItemProperty `
     -Name "ImagePath" `
     -Value $ImagePath
 Set-Service -Name "cloudflared" -StartupType Automatic
-Restart-Service -Name "cloudflared"
+$started = Start-CloudflaredService "cloudflared"
+if (-not $started) {
+    Write-Host "WARNING: cloudflared service installed but not confirmed Running after the bounded start."
+}
 $SessionId = Write-CloudflaredOwnership "cloudflared" $Executable $ResolvedConfig
 Write-Host "Installed and started the cloudflared service (session $SessionId)."

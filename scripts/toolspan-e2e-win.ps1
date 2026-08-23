@@ -58,6 +58,54 @@ function Assert-Admin {
     }
 }
 
+function Start-CloudflaredService([string]$Name) {
+    # cloudflared 2026.8.2 agent service can hang forever in StopPending when
+    # asked to stop, so avoid Restart-Service. If already running, leave it;
+    # otherwise start it with a bounded wait instead of blocking indefinitely.
+    $service = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if ($null -eq $service) {
+        return $false
+    }
+    if ($service.Status -eq "Running") {
+        return $true
+    }
+    $job = Start-Job -ScriptBlock {
+        param($serviceName)
+        Start-Service -Name $serviceName -ErrorAction Stop
+    } -ArgumentList $Name
+    if (-not (Wait-Job -Job $job -Timeout 30)) {
+        Stop-Job -Job $job -ErrorAction SilentlyContinue
+        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+        return $false
+    }
+    Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+    return ((Get-Service -Name $Name -ErrorAction SilentlyContinue).Status -eq "Running")
+}
+
+function Stop-CloudflaredServiceBounded([string]$Name) {
+    # Stop the agent service through a bounded job so a service that refuses to
+    # leave StopPending cannot hang the validation script indefinitely.
+    $service = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if ($null -eq $service) {
+        return $true
+    }
+    if ($service.Status -eq "Stopped") {
+        return $true
+    }
+    $job = Start-Job -ScriptBlock {
+        param($serviceName)
+        Stop-Service -Name $serviceName -Force -ErrorAction Stop
+    } -ArgumentList $Name
+    if (-not (Wait-Job -Job $job -Timeout 45)) {
+        Stop-Job -Job $job -ErrorAction SilentlyContinue
+        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+        return $false
+    }
+    Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+    $after = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    return ($null -eq $after -or $after.Status -eq "Stopped")
+}
+
 # ---- 下载 cloudflared（校验 SHA-256）----
 function Ensure-Cloudflared {
     if (-not (Test-Path -LiteralPath $BinDir)) { New-Item -ItemType Directory -Path $BinDir -Force | Out-Null }
@@ -178,7 +226,7 @@ try {
             $imagePath = ('"{0}" --config="{1}" tunnel run' -f $CloudflaredPath, $ConfigPath)
             Set-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName" -Name "ImagePath" -Value $imagePath
             Set-Service -Name $ServiceName -StartupType Automatic
-            Restart-Service -Name $ServiceName
+            $started = Start-CloudflaredService $ServiceName
             Start-Sleep -Seconds 3
             $after = Read-ServiceFingerprint
             $installEnv = New-Envelope "install" "PASS" @{
@@ -186,6 +234,7 @@ try {
                 sessionId = $state.sessionId
                 toolSpanVersion = $ToolSpanVersion
                 installPassed = $true
+                boundedStartConfirmed = $started
                 runningAfterInstall = $after.running
                 startupTypeAfterInstall = $after.startup
                 beforeSnapshot = $before
@@ -232,7 +281,10 @@ try {
             $before = $state.beforeSnapshot
             $serviceExists = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
             if ($null -ne $serviceExists) {
-                Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+                $stopped = Stop-CloudflaredServiceBounded $ServiceName
+                if (-not $stopped) {
+                    Write-Host "WARNING: cloudflared service did not stop within the bounded window; continuing with uninstall."
+                }
                 & $CloudflaredPath service uninstall
                 if ($LASTEXITCODE -ne 0) { throw "CLOUDFLARED_SERVICE_UNINSTALL_FAILED" }
             }

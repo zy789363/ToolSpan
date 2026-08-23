@@ -231,3 +231,18 @@ npm run verify:release
 - 将本文件的日期化执行记录与证据摘要附入 `docs/release/release-gates.md` 的 E-CF-WIN-01 行；
 - 若产品停用 "Windows one-click" claim，可把 `WINDOWS_ONE_CLICK_CLAIM` 置为 inactive，使该 gate 不再阻塞（由 `verify:release` 的 claim policy 机制处理）；
 - 清理：卸载后确认 VM 上无残留 cloudflared service、无 ownership 文件、无 token。
+
+---
+
+## 7. 已知问题与规避（实测记录）
+
+**cloudflared 2026.8.2 以 agent 模式安装服务，`Restart-Service` / `Stop-Service` 可能永久卡在 `StopPending` 假死**（服务进程已退出但 SCM 状态不刷新）。实测于 2026-08-23 腾讯云 Windows Server VM。
+
+- **症状**：install 阶段执行 `Restart-Service -Name cloudflared` 后无限输出 "正在等待服务停止…"，脚本挂起。
+- **根因**：新版 cloudflared agent service 对停止请求不响应，SCM 等待超时前一直保持 `StopPending`。
+- **规避（已内置到脚本）**：
+  - install/verify 阶段不再使用 `Restart-Service`，改用 `Start-CloudflaredService`（已 Running 则跳过；未运行则通过 30s 有界 Job 启动）；
+  - uninstall 阶段使用 `Stop-CloudflaredServiceBounded`（45s 有界 Job），超时后记录 WARNING 并继续 `service uninstall`，脚本不会挂死；
+  - install 证据新增 `boundedStartConfirmed` 字段如实反映有界启动结果。
+- **人工兜底**：若执行期间服务仍卡在 `StopPending`（重启后通常自动恢复），重启 VM 后重新运行对应 phase 即可；`Automatic` 启动类型会在重启后自愈。
+- **占位 config 说明**：`deploy/cloudflared/config.example.yml` 使用占位 tunnel ID（`00000000-...`），`tunnel run` 启动后连接会失败重试；这是验证 service 生命周期（install/start/reboot/uninstall + 无关服务保全）的可接受状态，`runningAfterInstall` 如实反映即可，不影响本 gate 结论。

@@ -93,3 +93,21 @@ test("E-CF-WIN-01 lifecycle scripts use only sanctioned cloudflared subcommands"
   assert.match(source, /tunnel run/u, "missing tunnel run ingress command");
   assert.match(source, /--version/u, "missing version probe");
 });
+
+test("E-CF-WIN-01 lifecycle scripts never call Restart-Service (agent StopPending hang)", async () => {
+  for (const filePath of [LIFECYCLE_SCRIPT, UNINSTALL_SCRIPT, INSTALL_SCRIPT]) {
+    const source = await scriptSource(filePath);
+    assert.equal(/\bRestart-Service\s+-Name\b/iu.test(source), false, `Restart-Service calls must be avoided in ${filePath}`);
+  }
+});
+
+test("E-CF-WIN-01 lifecycle scripts bound service start and stop with a timeout", async () => {
+  const source = await scriptSource(LIFECYCLE_SCRIPT);
+  assert.match(source, /function Start-CloudflaredService/u, "missing bounded start helper");
+  assert.match(source, /function Stop-CloudflaredServiceBounded/u, "missing bounded stop helper");
+  assert.match(source, /Wait-Job[^\n]*Timeout 30/u, "start must use a bounded 30s wait");
+  assert.match(source, /Wait-Job[^\n]*Timeout 45/u, "stop must use a bounded 45s wait");
+  assert.match(source, /boundedStartConfirmed/u, "install evidence must record bounded start result");
+  const uninstallSource = await scriptSource(UNINSTALL_SCRIPT);
+  assert.match(uninstallSource, /function Stop-CloudflaredServiceBounded/u, "uninstall script missing bounded stop helper");
+});

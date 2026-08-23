@@ -19,6 +19,30 @@ function Assert-Administrator {
     }
 }
 
+function Stop-CloudflaredServiceBounded([string]$Name) {
+    # cloudflared 2026.8.2 agent service can hang forever in StopPending when
+    # asked to stop, so stop through a bounded job and never block indefinitely.
+    $service = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if ($null -eq $service) {
+        return $true
+    }
+    if ($service.Status -eq "Stopped") {
+        return $true
+    }
+    $job = Start-Job -ScriptBlock {
+        param($serviceName)
+        Stop-Service -Name $serviceName -Force -ErrorAction Stop
+    } -ArgumentList $Name
+    if (-not (Wait-Job -Job $job -Timeout 45)) {
+        Stop-Job -Job $job -ErrorAction SilentlyContinue
+        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+        return $false
+    }
+    Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+    $after = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    return ($null -eq $after -or $after.Status -eq "Stopped")
+}
+
 function Resolve-OwnershipFile {
     if ($OwnershipFile -ne "") {
         return $OwnershipFile
@@ -90,7 +114,10 @@ try {
     $before = Get-ServiceSnapshot $ServiceName
     $existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($null -ne $existing) {
-        Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+        $stopped = Stop-CloudflaredServiceBounded $ServiceName
+        if (-not $stopped) {
+            Write-Host "WARNING: cloudflared service did not stop within the bounded window; continuing with uninstall."
+        }
         & $CloudflaredPath service uninstall
         if ($LASTEXITCODE -ne 0) { throw "CLOUDFLARED_SERVICE_UNINSTALL_FAILED" }
     }
