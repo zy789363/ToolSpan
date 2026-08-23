@@ -361,6 +361,28 @@ Status: `verify:release` 输出 `PASS / releaseReady=true / exit 0`。
 
 Remaining（不阻塞 `RELEASE_READY`）：
 
-- 正式 tag + GitHub Release：Maintainer 显式执行（tagCreated/published 均为 false）。
 - 可选外部验证：`E-CGPT-UI-01`（ChatGPT UI Smoke，connection/OAuth/tool scan 未完成）、`E-CF-GLOBAL-01`（Global Key legacy Apply，等 Owner 确认）。
-- 工作区清理：`apps/desktop/package-lock.json`、`apps/desktop/src/styles.css` 未提交；main 领先 origin 3 个提交未 push。
+
+---
+
+## 2026-08-23 · v0.6.0 正式 Release 记录（tag + GitHub Release + 安装包实装 smoke）
+
+背景：v2 UI 迁移落地完成（plan electric-forging-lovelace），产品版本 0.5.0 → 0.6.0，安装包重构建（MSI `55878074…`、NSIS `335b6a67…`）。
+
+1. **安装包实装 smoke（E-WIN-01 重新验证，绑定 0.6.0 新 hash）**：
+   - 卸载旧 0.5.0（NSIS per-user `/S`）→ 目录与 HKCU 卸载注册表清空；
+   - 安装 0.6.0（`ToolSpan_0.6.0_x64-setup.exe /S /currentuser`）→ `DisplayVersion=0.6.0`、exe 存在于 `C:\Users\86799\AppData\Local\ToolSpan`；
+   - 启动 smoke：窗口 `Title=ToolSpan`、`MainWindowHandle` 有效、`Responding=True`；
+   - owned child 验证：`msedgewebview2.exe --webview-exe-version=0.6.0` + `node ...\ToolSpan\desktop-host\main.js`（Desktop Host 从安装目录运行）；
+   - Owner 手工托盘确认：图标/菜单/Quit 确认框正常，确认后干净退出；
+   - 退出后复查：toolspan-desktop / owned webview / desktop-host 均无残留（排除 pwsh 自匹配误报后）。
+   - 证据：`.toolspan-dev/evidence/windows-native-smoke-20260823T153617Z.json`；`E-WIN-01.json` 更新为 0.6.0 hash 绑定 PASS（observedAt 2026-08-23T15:36:17Z）。
+2. **`npm run verify:release`（CI=true）**：dry-run PASS（83 package files、SBOM 764 组件、secret/personal-path findings 0）、`releaseReady=true`、`requiredPending=[]`、`tagCreated=false`、`published=false`。evidence：`.toolspan-dev/evidence/release/release-verification-20260823T154242461Z.json`。版本连锁同步：`npm-shrinkwrap.json`（package-runtime-policy 测试）、desktop-verification 断言、protocol fixture、setup-service 运行时版本正则、schemas pattern、setup-engine/desktop-setup-service fixtures、docs。
+3. **`.toolspan-dev/goal-state.json`**：`windowsLastBuiltMsiSha256=55878074…`、`windowsLastBuiltNsisSha256=335b6a67…` 更新；`goal:check` errors 0。
+4. **正式 tag + GitHub Release 已执行**：
+   - `git tag v0.6.0`（指向 `49062eb`）已推送 origin；
+   - `gh release create v0.6.0`（publishedAt 2026-08-23T15:51:00Z，非 draft）→ https://github.com/zy789363/ToolSpan/releases/tag/v0.6.0；
+   - 资产 6 项：MSI、NSIS setup、`toolspan-mcp-0.6.0.tgz`、SPDX 2.3、CycloneDX 1.6、`checksums.sha256`。
+
+至此 v0.6.0 正式发布闭环完成：源码迁移 + 测试全绿 + 安装包实装验证 + tag + GitHub Release。
+- 环境备注：发布过程中 github.com:443 数次断连（api.github.com 正常），push 重试 5 次成功；tag 先本地创建后随网络恢复推送。
