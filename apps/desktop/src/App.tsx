@@ -46,12 +46,12 @@ function CurrentPage({
   switch (page) {
     case "overview": return <OverviewPage navigate={navigate} />;
     case "setup": return <SetupPage />;
-    case "connection": return <ConnectionPage />;
+    case "connection": return <ConnectionPage navigate={navigate} />;
     case "workspaces": return <WorkspacesPage />;
     case "jobs": return <JobsPage />;
     case "artifacts": return <ArtifactsPage />;
     case "logs": return <LogsPage />;
-    case "settings": return <SettingsPage />;
+    case "settings": return <SettingsPage navigate={navigate} />;
   }
 }
 

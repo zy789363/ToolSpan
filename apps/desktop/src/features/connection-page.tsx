@@ -1,10 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
-import { BookOpen, Cable, CheckCircle2, Globe2, LockKeyhole } from "lucide-react";
+import { BookOpen, Cable, CheckCircle2, Globe2, LockKeyhole, Route } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useDesktopAdapter } from "../adapters/context";
-import type { ConnectionTestResult } from "../adapters/types";
+import type { ConnectionTestResult, PageId } from "../adapters/types";
 import { PageHeader } from "../components/page-header";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -16,7 +16,7 @@ import { formatTimestamp, OperationError, useRuntimeSnapshot } from "./shared";
 
 const HOST_IDS: HostId[] = ["chatgpt", "claude", "codex"];
 
-export function ConnectionPage() {
+export function ConnectionPage({ navigate }: { navigate(page: PageId): void }) {
   const { t, i18n } = useTranslation();
   const adapter = useDesktopAdapter();
   const snapshot = useRuntimeSnapshot();
@@ -39,6 +39,21 @@ export function ConnectionPage() {
         title={t("connection.title")}
       />
       {test.isError ? <OperationError /> : null}
+
+      {data.publicBaseUrl === null ? (
+        <div className="setup-banner">
+          <span className="setup-banner__icon"><Route aria-hidden="true" size={18} /></span>
+          <div className="setup-banner__main">
+            <div className="setup-banner__title">{t("connection.setupBannerTitle")}</div>
+            <div className="setup-banner__desc">{t("connection.setupBannerDesc")}</div>
+          </div>
+          <div className="setup-banner__actions">
+            <Button size="compact" variant="secondary" onClick={() => navigate("setup")}>
+              {t("connection.setupBannerOpen")}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {/* 本地连接 */}
       <Card className="panel">

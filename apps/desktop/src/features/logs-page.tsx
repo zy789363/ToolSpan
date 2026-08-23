@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardCopy, Pause, Play, Search, ShieldCheck } from "lucide-react";
+import { ClipboardCopy, Search, ShieldCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -10,6 +10,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Seg } from "../components/ui/seg";
+import { Toggle } from "../components/ui/toggle";
 import { formatTimestamp, OperationError, TranslatedStatus } from "./shared";
 
 export function LogsPage() {
@@ -47,7 +48,7 @@ export function LogsPage() {
           value={level}
         />
         <label className="search-field"><Search aria-hidden="true" size={15} /><span className="sr-only">{t("common.search")}</span><input onChange={(event) => setQuery(event.target.value)} placeholder={t("logs.searchPlaceholder")} type="search" value={query} /></label>
-        <Button onClick={() => setPaused((value) => !value)}>{paused ? <Play aria-hidden="true" size={15} /> : <Pause aria-hidden="true" size={15} />}{paused ? t("common.resume") : t("common.pause")}</Button>
+        <Toggle aria-label={t("common.pause")} checked={paused} label={paused ? t("common.resume") : t("common.pause")} onChange={setPaused} />
       </div>
       <div className="tail-status"><span className={paused ? "tail-dot tail-dot--paused" : "tail-dot"} aria-hidden="true" /><span>{paused ? t("logs.paused") : t("logs.live")}</span><Badge tone="positive"><ShieldCheck aria-hidden="true" size={12} /> {t("logs.sanitized")}</Badge></div>
       {logs.isError ? <OperationError /> : null}

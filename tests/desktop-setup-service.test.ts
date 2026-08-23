@@ -18,7 +18,7 @@ function snapshot(status: SetupSnapshot["status"] = "PREFLIGHT"): SetupSnapshot 
     status,
     manifest: {
       schemaVersion: "1.0",
-      toolSpanVersion: "0.5.0",
+      toolSpanVersion: "0.6.0",
       instanceName: "Desktop",
       localUrl: "http://127.0.0.1:8787",
       desiredHostname: "mcp.example.test",

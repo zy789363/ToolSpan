@@ -1,9 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Monitor, MonitorCog, Moon, Palette, Save, Settings2, Sun } from "lucide-react";
+import { KeyRound, Monitor, MonitorCog, Moon, Palette, Route, Save, Settings2, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useDesktopAdapter } from "../adapters/context";
+import type { PageId } from "../adapters/types";
 import { LANGUAGE_STORAGE_KEY, type AppLanguage } from "../i18n";
 import { useTheme, type ThemeMode } from "../lib/theme";
 import { PageHeader } from "../components/page-header";
@@ -13,7 +14,7 @@ import { Card } from "../components/ui/card";
 import { Seg } from "../components/ui/seg";
 import { OperationError, SectionTitle, useRuntimeSnapshot } from "./shared";
 
-export function SettingsPage() {
+export function SettingsPage({ navigate }: { navigate(page: PageId): void }) {
   const { t, i18n } = useTranslation();
   const adapter = useDesktopAdapter();
   const client = useQueryClient();
@@ -46,6 +47,19 @@ export function SettingsPage() {
     <div className="page-stack">
       <PageHeader description={t("settings.description")} eyebrow={t("settings.eyebrow")} title={t("settings.title")} />
       <div className="settings-grid">
+        <section className="settings-wide">
+          <SectionTitle>{t("settings.assistant")}</SectionTitle>
+          <Card className="settings-card">
+            <div className="settings-icon"><Route aria-hidden="true" size={18} /></div>
+            <div className="setting-row">
+              <span><strong>{t("settings.assistantName")}</strong><small>{t("settings.assistantDesc")}</small></span>
+              <Button onClick={() => navigate("setup")} size="compact" variant="primary">
+                <Route aria-hidden="true" size={14} />{t("settings.assistantOpen")}
+              </Button>
+            </div>
+          </Card>
+        </section>
+
         <section>
           <SectionTitle>{t("settings.appearance")}</SectionTitle>
           <Card className="settings-card">

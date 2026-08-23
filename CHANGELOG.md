@@ -12,6 +12,13 @@ All notable changes to ToolSpan are recorded here. Dates and release links are o
 - OAuth lifecycle support for refresh-token rotation without expanding Tool permissions.
 - Compiled release CLI smoke, bilingual documentation, usage snapshot checks, and deterministic Core CI.
 
+### Desktop 0.6 · UI v2 (modern tech-blue)
+
+- Migrates the v2 design system into the product desktop: ten-step primary color scale, brand/success gradients (area ≤ 8%), `--surface-3` / `--overlay`, blue-tinted shadows, `--dur-slow` / `--ease-spring`, H1 22px.
+- Adds v2 component library: Tabs, Modal (Radix AlertDialog controlled), Toggle, Stepper, EmptyState, Stat, CodeBlock, MonoBox, Field/Input, SecretInput, ConfirmPhrase, StatusBanner, NavBadge, Toast; enhances Button (subtle/xs/loading), Badge (pulse), Card (interactive), Notice (four tones), PageHeader (eyebrow icon).
+- Adds Setup progress card (Overview), Setup banner (Connection), Connection Assistant section (Settings), and EmptyState on Workspaces/Jobs/Artifacts; Logs pause becomes a Toggle. Setup Center keeps its real state machine and labels.
+- Removes the reference implementation (`apps/desktop`, React 18) and the HTML prototype (`ui-prototype`); v2 is now the single product UI. Adds 16 v2 component tests (total 53).
+
 ### Changed
 
 - The current product identity is ToolSpan; legacy WebGPT names remain only for documented migration compatibility.

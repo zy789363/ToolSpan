@@ -1222,8 +1222,8 @@ function stableJson(value: unknown): string {
 }
 
 function validateManifestDraft(draft: SetupManifestDraft, zoneName: string): void {
-  if (!/^0\.5\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$/u.test(draft.toolSpanVersion)) {
-    throw new Error("Safe Manifest toolSpanVersion must be a 0.5.x version");
+  if (!/^0\.6\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$/u.test(draft.toolSpanVersion)) {
+    throw new Error("Safe Manifest toolSpanVersion must be a 0.6.x version");
   }
   if (draft.instanceName.length < 1 || draft.instanceName.length > 80) {
     throw new Error("Safe Manifest instanceName must contain 1-80 characters");

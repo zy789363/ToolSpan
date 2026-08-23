@@ -33,7 +33,7 @@ scripts/install-cloudflared-service.ps1       # 安装 + ownership 记录（已�
 ```text
 Windows 11 x64 管理员 VM（可丢弃，勿用生产机）
 已安装 Node 22.17+ 或 24（ToolSpan 运行时所需）
-ToolSpan 项目 checkout（本仓库，当前版本 0.5.0）
+ToolSpan 项目 checkout（本仓库，当前版本 0.6.0）
 官方 cloudflared.exe（Windows amd64，签名来源已验证）
 一份本地 cloudflared config（含真实 Tunnel ID 与 credentials-file 路径）
 ```
@@ -179,7 +179,7 @@ cloudflared 获取方式建议与 `scripts/e2e-cloudflare-public.mjs` 一致：�
   "secretValues": 0,
   "proof": {
     "kind": "CLOUDFLARED_SERVICE_LIFECYCLE",
-    "toolSpanVersion": "0.5.0",
+    "toolSpanVersion": "0.6.0",
     "cloudflaredVersion": "2026.8.2",
     "cloudflaredSha256": "c29eee2b121f5436a642eed69fd9767da7e7b8c510fa50aaa130337f931357b5",
     "hostOs": "Windows 11 Pro x64",

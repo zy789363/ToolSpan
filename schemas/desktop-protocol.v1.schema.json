@@ -219,7 +219,7 @@
       "type": "object",
       "properties": {
         "schemaVersion": { "const": "1.0" },
-        "toolSpanVersion": { "type": "string", "pattern": "^0\\.5\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
+        "toolSpanVersion": { "type": "string", "pattern": "^0\\.6\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
         "instanceName": { "type": "string", "minLength": 1, "maxLength": 80 },
         "localUrl": {
           "type": "string",

@@ -82,7 +82,7 @@ exports[`synthetic visual fixtures > 'overview' 'light' 1`] = `
 
 exports[`synthetic visual fixtures > 'settings' 'dark' 1`] = `
 {
-  "cardCount": 4,
+  "cardCount": 5,
   "fixture": "settings",
   "heading": "Settings",
   "metricCount": 0,
@@ -102,7 +102,7 @@ exports[`synthetic visual fixtures > 'settings' 'dark' 1`] = `
 
 exports[`synthetic visual fixtures > 'settings' 'light' 1`] = `
 {
-  "cardCount": 4,
+  "cardCount": 5,
   "fixture": "settings",
   "heading": "Settings",
   "metricCount": 0,

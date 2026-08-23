@@ -551,6 +551,7 @@ body { font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragi
 
 /* --- PageHeader 对齐（参考 page-head.tsx：灰标 + 24px 标题 + 描述） --- */
 .eyebrow { color: var(--faint); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.eyebrow__icon { display: inline-flex; margin-right: 5px; vertical-align: -2px; color: var(--primary); }
 .page-header h1 { font-size: 24px; font-weight: 650; letter-spacing: -0.02em; }
 .page-header .page-description { color: var(--muted); font-size: 13px; }
 
@@ -572,3 +573,175 @@ body { font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragi
 .spin { animation: spin .8s linear infinite; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
 :root[data-reduced-motion="true"] *, :root[data-reduced-motion="true"] *::before, :root[data-reduced-motion="true"] *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+
+/* ============================================================
+   设计升级 v4 · Token v2 追加（现代科技蓝）
+   策略：追加新变量与覆盖规则，现有 29 变量与全部类名不动
+   ============================================================ */
+:root {
+  --primary-50: #eff6ff;
+  --primary-100: #dbeafe;
+  --primary-200: #bfdbfe;
+  --primary-300: #93c5fd;
+  --primary-400: #60a5fa;
+  --primary-500: #3b82f6;
+  --primary-600: #2563eb;
+  --primary-700: #1d4ed8;
+  --primary-800: #1e40af;
+  --primary-900: #1e3a8a;
+  --primary-950: #172554;
+  --gradient-brand: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);
+  --gradient-success: linear-gradient(135deg, #047857 0%, #0d9488 100%);
+  --surface-3: #eef2f7;
+  --overlay: rgb(15 23 42 / 0.45);
+  --shadow-xs: 0 1px 2px rgb(37 99 235 / 0.06);
+  --shadow-sm: 0 1px 3px rgb(37 99 235 / 0.07), 0 1px 2px rgb(37 99 235 / 0.04);
+  --shadow-md: 0 4px 12px rgb(37 99 235 / 0.09), 0 2px 4px rgb(37 99 235 / 0.05);
+  --shadow-lg: 0 16px 40px rgb(37 99 235 / 0.18);
+  --positive-border: #a7f3d0;
+  --warning-border: #fde68a;
+  --danger-border: #fecaca;
+  --info-border: #bae6fd;
+  --dur-slow: 320ms;
+  --ease-spring: cubic-bezier(0.22, 1.6, 0.36, 1);
+}
+
+:root[data-theme="dark"] {
+  --primary-50: #eff6ff;
+  --primary-100: #dbeafe;
+  --primary-200: #bfdbfe;
+  --primary-300: #93c5fd;
+  --primary-400: #60a5fa;
+  --primary-500: #3b82f6;
+  --primary-600: #2563eb;
+  --primary-700: #1d4ed8;
+  --primary-800: #1e40af;
+  --primary-900: #1e3a8a;
+  --primary-950: #172554;
+  --gradient-brand: linear-gradient(135deg, #3b82f6 0%, #38bdf8 100%);
+  --gradient-success: linear-gradient(135deg, #34d399 0%, #2dd4bf 100%);
+  --surface-3: #24334a;
+  --overlay: rgb(2 6 23 / 0.6);
+  --positive-border: #134e3f;
+  --warning-border: #4a3a10;
+  --danger-border: #5c2327;
+  --info-border: #14445f;
+}
+
+/* 渐变工具类（面积 ≤8%：品牌 mark / stat 图标底 / 状态横幅） */
+.bg-gradient-brand { background-image: var(--gradient-brand); }
+.bg-gradient-success { background-image: var(--gradient-success); }
+
+/* v2 视觉覆盖：H1 22px / 数字 tabular / 概览指标渐变图标 */
+.page-header h1 { font-size: 22px; }
+.table, .mono-box, .log-line time, .seg__count, .badge { font-variant-numeric: tabular-nums; }
+.metric-icon { background-image: var(--gradient-brand); color: #fff; border: 0; }
+.metric-card strong, .metric-card .metric-value { font-variant-numeric: tabular-nums; }
+
+/* --- v2 新增组件：Toggle（开关） --- */
+.toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.toggle__track { position: relative; width: 36px; height: 20px; flex: 0 0 auto; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--panel-muted); transition: background-color .16s ease, border-color .16s ease; }
+.toggle__track[data-state="checked"], .toggle__track--on { border-color: var(--primary); background: var(--primary); }
+.toggle__thumb { position: absolute; top: 50%; left: 4px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: var(--shadow-sm); transform: translateY(-50%); transition: left .18s var(--ease-spring); }
+.toggle__track[data-state="checked"] .toggle__thumb, .toggle__track--on .toggle__thumb { left: 18px; }
+.toggle__label { font-size: 13px; color: var(--muted); }
+
+/* --- v2 新增组件：Stepper（向导步骤条） --- */
+.stepper { display: flex; align-items: flex-start; gap: 4px; }
+.stepper__item { display: flex; flex: 1; align-items: flex-start; gap: 4px; min-width: 0; }
+.stepper__node { display: grid; flex: 0 0 auto; width: 24px; height: 24px; place-items: center; border: 1px solid var(--border); border-radius: 999px; background: var(--panel-muted); color: var(--faint); font-size: 11px; font-weight: 650; transition: background-color .16s ease, border-color .16s ease, color .16s ease; }
+.stepper__node--done { border-color: var(--positive-border); background: var(--positive-soft); color: var(--positive); }
+.stepper__node--active { border-color: var(--primary); background: var(--primary); color: #fff; box-shadow: var(--shadow-xs); }
+.stepper__label { margin-top: 2px; color: var(--faint); font-size: 11px; font-weight: 500; white-space: nowrap; }
+.stepper__label--active { color: var(--text); }
+.stepper__line { flex: 1; height: 1px; margin-top: 12px; background: var(--border); transition: background-color .16s ease; }
+.stepper__line--done { background: var(--positive-border); }
+
+/* --- v2 新增组件：EmptyState（教育性空态） --- */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 42px 24px; text-align: center; }
+.empty-state--compact { padding: 26px 20px; }
+.empty-state__icon { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 999px; background: var(--primary-soft); color: var(--primary); }
+.empty-state__title { font-size: 13px; font-weight: 650; }
+.empty-state__desc { max-width: 42ch; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.empty-state__action { margin-top: 6px; }
+
+/* --- v2 新增组件：CodeBlock（深色终端代码块） --- */
+.code-block--terminal { display: block; overflow: hidden; border: 1px solid var(--border); border-radius: 9px; background: #0f172a; padding: 0; }
+.code-block--terminal .code-block__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid rgb(255 255 255 / 0.09); background: rgb(255 255 255 / 0.04); padding: 8px 13px; }
+.code-block--terminal .code-block__file { color: #64748b; font-family: "Cascadia Code", Consolas, monospace; font-size: 11px; }
+.code-block--terminal pre { margin: 0; overflow-x: auto; padding: 12px 13px; color: #e2e8f0; font-family: "Cascadia Code", Consolas, monospace; font-size: 11.5px; line-height: 1.65; white-space: pre-wrap; }
+
+/* --- v2 新增组件：SecretInput（密钥输入 + 眼睛切换） --- */
+.secret-wrap { position: relative; display: block; }
+.secret-wrap .field__input, .secret-wrap input { width: 100%; padding-right: 38px; }
+.secret-toggle { position: absolute; top: 50%; right: 4px; display: grid; width: 28px; height: 28px; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--faint); cursor: pointer; transform: translateY(-50%); }
+.secret-toggle:hover { background: var(--panel-muted); color: var(--muted); }
+
+/* --- v2 新增组件：ConfirmPhrase（高风险确认短语） --- */
+.confirm-phrase { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--warning-border); border-radius: 10px; background: var(--warning-soft); padding: 14px; }
+.confirm-phrase__title { display: flex; align-items: center; gap: 6px; color: var(--warning); font-size: 12px; font-weight: 700; }
+.confirm-phrase__text { color: var(--text); font-size: 12px; line-height: 1.6; }
+.confirm-phrase code { border-radius: 5px; background: var(--warning-soft); padding: 1px 6px; color: var(--warning); font-weight: 700; }
+.confirm-phrase__ok { margin-top: 4px; color: var(--positive); font-size: 12px; font-weight: 600; }
+
+/* --- v2 新增组件：StatusBanner（状态横幅） --- */
+.status-banner { display: flex; align-items: flex-start; gap: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-muted); padding: 18px; }
+.status-banner__icon { flex: 0 0 auto; margin-top: 1px; }
+.status-banner__title { font-size: 13px; font-weight: 650; }
+.status-banner__desc { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.status-banner__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.status-banner--running { border-color: var(--info-border); background: var(--info-soft); }
+.status-banner--running .status-banner__icon { color: var(--info); }
+.status-banner--ok { border-color: var(--positive-border); background: var(--positive-soft); }
+.status-banner--ok .status-banner__icon { color: var(--positive); }
+.status-banner--warn { border-color: var(--warning-border); background: var(--warning-soft); }
+.status-banner--warn .status-banner__icon { color: var(--warning); }
+.status-banner--err { border-color: var(--danger-border); background: var(--danger-soft); }
+.status-banner--err .status-banner__icon { color: var(--danger); }
+
+/* --- v2 新增组件：NavBadge（导航角标） --- */
+.nav-badge { position: absolute; top: 1px; right: 1px; display: grid; min-width: 15px; height: 15px; place-items: center; border-radius: 999px; background: var(--primary); padding: 0 4px; color: #fff; font-size: 9px; font-weight: 700; line-height: 15px; box-shadow: var(--shadow-xs); }
+.nav-item { position: relative; }
+
+/* --- v2 新增组件：Toast（浮动反馈） --- */
+.toast-region { position: fixed; bottom: 24px; left: 50%; z-index: 200; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; transform: translateX(-50%); }
+.toast { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 9px; background: var(--panel); padding: 10px 14px; color: var(--text); font-size: 13px; font-weight: 550; box-shadow: var(--shadow-lg); }
+.toast svg { color: var(--positive); }
+.toast--warn svg { color: var(--warning); }
+
+/* --- v2 Setup 视觉：四路径卡片渐变 icon / 推荐徽章 --- */
+.setup-path-card__icon { transition: background-color .16s ease, color .16s ease; }
+.setup-path-card[aria-pressed="true"] .setup-path-card__icon { background-image: var(--gradient-brand); color: #fff; }
+.setup-recommended-tag { display: inline-flex; align-items: center; border-radius: 999px; background: var(--primary-soft); padding: 1px 8px; color: var(--primary); font-size: 10px; font-weight: 700; }
+
+/* --- v2 入口横幅（Overview Setup 进度卡 / Connection 入口） --- */
+.setup-banner { display: flex; align-items: center; gap: 14px; border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border)); border-radius: 12px; background: linear-gradient(90deg, var(--primary-soft), transparent); padding: 15px 17px; }
+.setup-banner__icon { display: grid; flex: 0 0 auto; width: 40px; height: 40px; place-items: center; border-radius: 10px; background-image: var(--gradient-brand); color: #fff; box-shadow: var(--shadow-sm); }
+.setup-banner__main { min-width: 0; flex: 1; }
+.setup-banner__title { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 650; }
+.setup-banner__desc { margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.setup-banner__actions { display: flex; flex: 0 0 auto; gap: 8px; }
+
+/* --- v2 组件增强：Button subtle/xs/loading / Badge pulse / Card interactive / Notice 四态 --- */
+.button--subtle { border-color: transparent; background: var(--primary-soft); color: var(--primary); }
+.button--subtle:hover:not(:disabled) { border-color: transparent; background: var(--primary-100); }
+.button--xs { min-height: 26px; padding: 3px 8px; font-size: 12px; }
+.button__spinner { display: inline-block; width: 13px; height: 13px; flex: 0 0 auto; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+.badge--positive .badge__dot.badge__dot--pulse, .badge__dot--pulse { animation: status-pulse 2.2s ease-out infinite; }
+.card--interactive { cursor: pointer; transition: transform .16s var(--ease-out, ease), border-color .16s ease, box-shadow .16s ease; }
+.card--interactive:hover { border-color: var(--primary-border, var(--primary-200)); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.notice--success { border-color: var(--positive-border); background: var(--positive-soft); color: var(--positive); }
+.notice--danger { border-color: var(--danger-border); background: var(--danger-soft); color: var(--danger); }
+
+/* --- v2 新增组件：Field / Input（独立于 onboarding .field） --- */
+.field__wrap { display: flex; flex-direction: column; gap: 6px; }
+.field__input { height: 36px; width: 100%; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--panel); color: var(--text); padding: 0 10px; font-size: 13px; }
+.field__input::placeholder { color: var(--faint); }
+.field__input:focus { border-color: var(--primary); outline: none; }
+.field__helper { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.field__error { color: var(--danger); font-size: 12px; font-weight: 600; }
+
+/* --- v2 新增组件：Modal 图标 / CodeBlock 行号 --- */
+.modal-icon { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border-radius: 9px; background: var(--primary-soft); color: var(--primary); }
+.code-block__ln { display: grid; grid-template-columns: 2.2rem 1fr; gap: 10px; }
+.code-block__ln-num { color: #64748b; text-align: right; user-select: none; }

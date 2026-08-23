@@ -8,6 +8,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { ConfirmDialog } from "../components/ui/confirm-dialog";
+import { EmptyState } from "../components/ui/empty-state";
 import { Notice } from "../components/ui/notice";
 import { OperationError, useRuntimeSnapshot } from "./shared";
 
@@ -33,7 +34,12 @@ export function WorkspacesPage() {
       <Notice icon={<LockKeyhole aria-hidden="true" size={15} />}>{t("workspaces.addHint")}</Notice>
       <div className="ws-grid">
         {snapshot.data.workspaces.length === 0 ? (
-          <Card className="empty-panel"><Folder aria-hidden="true" size={26} /><p>{t("workspaces.empty")}</p></Card>
+          <EmptyState
+            action={<Button onClick={() => add.mutate()} size="compact" variant="primary"><FolderPlus aria-hidden="true" size={14} />{t("workspaces.add")}</Button>}
+            description={t("workspaces.emptyDesc")}
+            icon={<Folder aria-hidden="true" size={20} />}
+            title={t("workspaces.emptyTitle")}
+          />
         ) : snapshot.data.workspaces.map((workspace) => (
           <Card className="ws-card" key={workspace.id}>
             <div className="ws-card__icon"><Folder aria-hidden="true" size={20} /></div>

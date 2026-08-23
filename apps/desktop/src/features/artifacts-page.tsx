@@ -9,6 +9,7 @@ import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { ConfirmDialog } from "../components/ui/confirm-dialog";
 import { CopyButton } from "../components/ui/copy-button";
+import { EmptyState } from "../components/ui/empty-state";
 import { Notice } from "../components/ui/notice";
 import { formatBytes, formatTimestamp, OperationError } from "./shared";
 
@@ -22,7 +23,7 @@ export function ArtifactsPage() {
       {artifacts.isError ? <OperationError /> : null}
       <Card>
         {(artifacts.data ?? []).length === 0 ? (
-          <p className="empty-note">{t("artifacts.empty")}</p>
+          <EmptyState compact description={t("artifacts.emptyDesc")} icon={<FileOutput aria-hidden="true" size={18} />} title={t("artifacts.emptyTitle")} />
         ) : (
           <div className="table-wrap">
             <table className="table">

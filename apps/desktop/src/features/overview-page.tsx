@@ -99,6 +99,24 @@ export function OverviewPage({ navigate }: { navigate(page: PageId): void }) {
         </Card>
       </section>
 
+      {data.connection.publicReady !== true ? (
+        <div className="setup-banner">
+          <span className="setup-banner__icon"><Wrench aria-hidden="true" size={18} /></span>
+          <div className="setup-banner__main">
+            <div className="setup-banner__title">
+              {t("overview.setupCardTitle")}
+              <Badge tone="info" dot pulse>{t("overview.setupCardNotConfigured")}</Badge>
+            </div>
+            <div className="setup-banner__desc">{t("overview.setupCardDesc")}</div>
+          </div>
+          <div className="setup-banner__actions">
+            <Button size="compact" variant="secondary" onClick={() => navigate("setup")}>
+              {t("overview.setupCardStart")}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <section>
         <SectionTitle>{t("overview.primaryActions")}</SectionTitle>
         <Card className="quick-actions">

@@ -10,6 +10,7 @@ import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { ConfirmDialog } from "../components/ui/confirm-dialog";
 import { CopyButton } from "../components/ui/copy-button";
+import { EmptyState } from "../components/ui/empty-state";
 import { Seg } from "../components/ui/seg";
 import { StatusDot, type StatusKind } from "../components/ui/status-dot";
 import { formatDuration, formatTimestamp, OperationError, TranslatedStatus } from "./shared";
@@ -58,7 +59,7 @@ export function JobsPage() {
       {jobs.isError || cancel.isError ? <OperationError /> : null}
       <Card>
         {(jobs.data ?? []).length === 0 ? (
-          <p className="empty-note"><Clock3 aria-hidden="true" size={16} /> {t("jobs.empty")}</p>
+          <EmptyState compact description={t("jobs.emptyDesc")} icon={<Clock3 aria-hidden="true" size={18} />} title={t("jobs.emptyTitle")} />
         ) : (
           <div className="table-wrap">
             <table className="table">

@@ -63,7 +63,7 @@ describe("ToolSpan desktop renderer", () => {
     const { container } = await renderApp({ page: "connection" });
     await screen.findByRole("heading", { name: "Connection" });
     expect(container.querySelectorAll("input")).toHaveLength(0);
-    expect(screen.queryByText(/cloudflare|api key|global key/iu)).toBeNull();
+    expect(screen.queryByText(/global api key|scoped api token|api key/iu)).toBeNull();
     expect(screen.getByRole("button", { name: "Test configured public endpoint" }).hasAttribute("disabled")).toBe(true);
   });
 
