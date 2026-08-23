@@ -189,9 +189,8 @@ export async function run() {
   ], "docs/setup/chatgpt-custom-mcp.md");
   requirePatterns(docs["domains-and-namesilo.md"], [
     /I already have a domain/u, /Use any registrar/u,
-    /NameSilo — Support ToolSpan/u, /NameSilo — No referral/u,
-    /项目可能获得佣金/u,
-    /Affiliate-only Coupon `toolspan`.*attribution/isu,
+    /NameSilo — No referral/u,
+    /referral\/推广路径已移除|不展示任何 referral\/推广路径|无 referral 路径/u,
     /不带 `rid`/u,
     /超过 30 天自动隐藏所有具体价格、折扣、合计数字和 coupon CTA/u,
     /TEXT_ONLY_FALLBACK/u, /FALLBACK_PASS/u,

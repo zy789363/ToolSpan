@@ -173,21 +173,11 @@ function DomainChooser({
         <button aria-pressed={choice === "other_registrar"} className="domain-choice" onClick={() => onChange("other_registrar")} type="button">
           {t("setup.anyRegistrar")}
         </button>
-        <a aria-current={choice === "namesilo_referral" ? "true" : undefined} className="domain-choice" href={commercial.referralUrl} onClick={() => onChange("namesilo_referral")} rel="noreferrer" target="_blank">
-          {t("setup.namesiloSupport")}<ExternalLink aria-hidden="true" size={13} />
-        </a>
         <a aria-current={choice === "namesilo_no_referral" ? "true" : undefined} className="domain-choice" href={commercial.directUrl} onClick={() => onChange("namesilo_no_referral")} rel="noreferrer" target="_blank">
           {t("setup.namesiloNoReferral")}<ExternalLink aria-hidden="true" size={13} />
         </a>
       </div>
       <div className="commercial-disclosure">
-        <p>{t("setup.affiliateDisclosure")}</p>
-        {choice === "namesilo_referral" && commercial.current && commercial.example !== null
-          ? <p>{t("setup.affiliateOffer", { offer: commercial.example })}</p>
-          : choice === "namesilo_referral" && !commercial.current ? <p>{t("setup.staleOffer")}</p> : null}
-        {choice === "namesilo_referral" && commercial.current && commercial.coupon !== null
-          ? <p>{t("setup.affiliateCoupon", { coupon: commercial.coupon })}</p>
-          : null}
         <p>{t("setup.noReferralRule")}</p>
         <p>{snapshot.vendorAssets === "verified" ? t("setup.verifiedVendor") : t("setup.textOnlyVendor")}</p>
         <p><strong>{t("setup.registrarBoundary")}</strong></p>

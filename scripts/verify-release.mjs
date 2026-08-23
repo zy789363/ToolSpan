@@ -53,12 +53,12 @@ export const RELEASE_CLAIM_POLICY = Object.freeze({
     basis: "SETUP_ONE_CLICK_CLOUDFLARE_FLOW_PRESENT",
   }),
   WINDOWS_ONE_CLICK_VALIDATED: Object.freeze({
-    active: true,
-    basis: "WINDOWS_SETUP_UI_OR_CLAIM_CONSERVATIVELY_ACTIVE",
+    active: false,
+    basis: "WINDOWS_SETUP_USES_MANUAL_CLOUDFLARED_ONLY",
   }),
   COMMERCIAL_CTA_CURRENT: Object.freeze({
-    active: true,
-    basis: "COMMERCIAL_CTA_PRESENT",
+    active: false,
+    basis: "REFERRAL_CTA_REMOVED",
   }),
   VENDOR_ASSET_CLAIM: Object.freeze({
     active: false,

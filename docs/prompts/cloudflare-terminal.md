@@ -7,7 +7,7 @@
 先验证 local health，再只读查询 Zone/Tunnel/DNS 并生成 Dry Run。Zone 缺失/Pending 必须 `STOP_APPLY`；create 不盲目重放，GET/幂等操作只做有限 retry。未知资源冲突停止。需要 UAC 或 official cloudflared credential/service storage 时由用户接管；不按端口杀进程，不接管外部 service。
 
 <!-- setup-checkpoints:start -->
-1. `AFFILIATE_CHOICE` — PAUSE：用户明确 domain path；终端不打开 referral/direct URL、不复制或使用 coupon。
+1. `AFFILIATE_CHOICE` — PAUSE：用户明确 domain path；终端不打开 direct URL、不复制或使用 coupon。
 2. `LOGIN` — PAUSE：任何浏览器登录、CAPTCHA、2FA 由用户完成；终端不抓取 session/cookie。
 3. `SECRET_ENTRY` — PAUSE：用户本地输入；终端只接收受控 adapter 的瞬时句柄，不读取或打印 Secret value。
 4. `CLOUDFLARE_APPLY` — PAUSE：先输出无秘密 Dry Run；create/update/delete、service/UAC、rotate/revoke 前确认。

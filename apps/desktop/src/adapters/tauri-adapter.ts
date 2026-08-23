@@ -123,7 +123,7 @@ const setupSafeManifestSchema = z.object({
   oauthDiscoveryUrl: z.string(),
   expectedToolCount: z.literal(27),
   tunnelName: z.string(),
-  domainChoice: z.enum(["existing", "other_registrar", "namesilo_referral", "namesilo_no_referral"]),
+  domainChoice: z.enum(["existing", "other_registrar", "namesilo_no_referral"]),
   officialDocs: z.array(z.string()),
   generatedAt: z.string(),
 }).strict();

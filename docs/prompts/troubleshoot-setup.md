@@ -7,7 +7,7 @@
 Zone missing/Pending、DNS/Tunnel collision、crash reconcile、credential re-entry、rate limit、service/UAC、DNS/TLS、Host policy 分支分别处理。任何 fix 先 focused check；外部写/回滚必须另行确认。不得通过放宽 SSRF/Host/Origin/allowedRoots、减少 27 tools 或启用任意 Shell 来“修复”。
 
 <!-- setup-checkpoints:start -->
-1. `AFFILIATE_CHOICE` — PAUSE/NOT_APPLICABLE：确认故障不来自隐藏 referral/coupon state；不自动打开商业链接。
+1. `AFFILIATE_CHOICE` — PAUSE/NOT_APPLICABLE：确认故障不来自隐藏 coupon 或 referral state（当前产品已无 referral 路径）；不自动打开商业链接。
 2. `LOGIN` — PAUSE：若需重现账号问题，由用户接管登录、CAPTCHA、2FA；Agent 不取 session secret。
 3. `SECRET_ENTRY` — PAUSE：远程 reconcile 需要 credential 时让用户本地重输；不从历史恢复或打印。
 4. `CLOUDFLARE_APPLY` — PAUSE：任何修复写入、rollback、nameserver Save、service/UAC 前展示范围与 precondition。

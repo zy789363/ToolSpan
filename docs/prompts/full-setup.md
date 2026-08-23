@@ -7,7 +7,7 @@
 执行顺序：local health → domain choice → Zone exists/Active → Dry Run → confirmed Tunnel/ingress/DNS Apply → official cloudflared runtime → public health → OAuth metadata → MCP Inspector → ChatGPT compatibility → Codex real write/job → cleanup/receipt。PLANNED 前副作用为 0；未知冲突停止；second run duplicates=0；rollback created-only/fingerprint-guarded。
 
 <!-- setup-checkpoints:start -->
-1. `AFFILIATE_CHOICE` — PAUSE：四个等权选项；披露 commission/coupon attribution；no-referral 无 rid 且不用 coupon。
+1. `AFFILIATE_CHOICE` — PAUSE：三个等权选项（已有域名 / 任意 registrar / NameSilo no-referral）；无 referral 路径，不打开商业链接、不用 coupon。
 2. `LOGIN` — PAUSE：用户接管 Cloudflare、registrar、ChatGPT 登录、CAPTCHA、2FA；Agent 不观察/记录。
 3. `SECRET_ENTRY` — PAUSE：Scoped Token 或 Legacy Key/email 只在本地 masked field 输入；不持久化、不回显。
 4. `CLOUDFLARE_APPLY` — PAUSE：Zone Active 且 Dry Run 已展示后确认；nameserver 最终 Save、UAC、外部写/删也在此确认。

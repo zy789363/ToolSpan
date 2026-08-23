@@ -1268,7 +1268,7 @@ function validateManifestDraft(draft: SetupManifestDraft, zoneName: string): voi
   if (draft.tunnelName.length < 1 || draft.tunnelName.length > 100) {
     throw new Error("Safe Manifest tunnelName must contain 1-100 characters");
   }
-  if (!["existing", "other_registrar", "namesilo_referral", "namesilo_no_referral"].includes(draft.domainChoice)) {
+  if (!["existing", "other_registrar", "namesilo_no_referral"].includes(draft.domainChoice)) {
     throw new Error("Safe Manifest domainChoice is invalid");
   }
   if (draft.officialDocs.length < 1 || draft.officialDocs.length > 32) {

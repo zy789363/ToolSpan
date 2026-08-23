@@ -190,7 +190,7 @@ export interface SetupSafeManifest {
   oauthDiscoveryUrl: string;
   expectedToolCount: 27;
   tunnelName: string;
-  domainChoice: "existing" | "other_registrar" | "namesilo_referral" | "namesilo_no_referral";
+  domainChoice: "existing" | "other_registrar" | "namesilo_no_referral";
   officialDocs: string[];
   generatedAt: string;
 }

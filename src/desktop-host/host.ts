@@ -47,7 +47,6 @@ const JOB_STATUSES = new Set([
 const SETUP_DOMAIN_CHOICES = new Set([
   "existing",
   "other_registrar",
-  "namesilo_referral",
   "namesilo_no_referral",
 ]);
 const GLOBAL_KEY_ACKNOWLEDGEMENT = "I UNDERSTAND GLOBAL API KEY ACCESS";

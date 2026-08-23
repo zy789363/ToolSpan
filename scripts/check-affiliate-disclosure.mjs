@@ -38,31 +38,20 @@ export function validateAffiliateDocument(content, links, offer) {
   const expectedChoices = [
     "1. I already have a domain",
     "2. Use any registrar",
-    "3. NameSilo — Support ToolSpan",
-    "4. NameSilo — No referral",
+    "3. NameSilo — No referral",
   ];
-  if (JSON.stringify(choices) !== JSON.stringify(expectedChoices)) fail("four domain paths must appear in the specified order");
+  if (JSON.stringify(choices) !== JSON.stringify(expectedChoices)) fail("three domain paths must appear in the specified order");
   if (choices.some((choice) => /\*\*|\[|推荐|recommended|best|★|🔥/iu.test(choice))) {
     fail("domain choices must use equal plain-text visual weight without badges or preselection");
   }
 
-  const referral = block(content, "namesilo-disclosure");
   const direct = block(content, "namesilo-direct");
   const fallback = block(content, "vendor-fallback");
-  includesAll(referral, [
-    /项目可能获得佣金/u,
-    /Affiliate-only Coupon/u,
-    /attribution/iu,
-    /续费/u,
-    /premium domain/iu,
-    /税费/u,
-    /结账/u,
-    /Discount Program/u,
-  ], "adjacent referral disclosure");
-  if (!referral.includes(`\`${offer.affiliateCouponCode}\``)) fail("referral disclosure must identify the coupon code");
-  for (const [name, pair] of Object.entries(links.links)) {
-    if (!referral.includes(pair.referral)) fail(`referral disclosure is missing the ${name} referral URL`);
-    if (!direct.includes(pair.direct)) fail(`no-referral block is missing the ${name} direct URL`);
+  if (/NameSilo — Support ToolSpan|namesilo_referral|rid=|affiliateCoupon/iu.test(content)) {
+    fail("referral paths must be fully removed from the domain document");
+  }
+  for (const [name, link] of Object.entries(links.links)) {
+    if (!direct.includes(link.direct)) fail(`no-referral block is missing the ${name} direct URL`);
   }
   if (/(?:[?&]rid=|toolspan)/iu.test(direct)) fail("no-referral block must contain neither rid nor coupon");
   if (!/不带 `rid`/u.test(direct) || !/不显示、复制或使用 affiliate coupon/iu.test(direct)) {
@@ -83,7 +72,7 @@ export function validateAffiliateDocument(content, links, offer) {
   if (!fallback.includes("TEXT_ONLY_FALLBACK") || !fallback.includes("FALLBACK_PASS")) {
     fail("vendor fallback block must explicitly define TEXT_ONLY_FALLBACK/FALLBACK_PASS");
   }
-  return { choices, referral, direct };
+  return { choices, direct };
 }
 
 export async function run() {
@@ -99,8 +88,9 @@ export async function run() {
     status: "PASS",
     domainPaths: evidence.choices.length,
     equalVisualWeight: "PASS",
-    adjacentCommissionDisclosure: "PASS",
-    couponAttributionDisclosure: "PASS",
+    referralPathRemoved: true,
+    adjacentCommissionDisclosure: "NOT_PRESENT",
+    couponAttributionDisclosure: "NOT_PRESENT",
     noReferralRidCount: 0,
     noReferralCouponUse: false,
     staleFallback: "PASS",

@@ -5,15 +5,12 @@
   "coupon": "toolspan",
   "links": {
     "home": {
-      "referral": "https://www.namesilo.com/?rid=1373371gm",
       "direct": "https://www.namesilo.com/"
     },
     "search": {
-      "referral": "https://www.namesilo.com/domain/search-domains?rid=1373371gm",
       "direct": "https://www.namesilo.com/domain/search-domains"
     },
     "pricing": {
-      "referral": "https://www.namesilo.com/pricing?rid=1373371gm",
       "direct": "https://www.namesilo.com/pricing"
     }
   }

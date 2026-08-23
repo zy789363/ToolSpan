@@ -114,7 +114,7 @@ export function validateSafeManifest(manifest, packageVersion) {
   if (manifest.expectedToolCount !== 27) fail("safeManifest.expectedToolCount must be exactly 27");
   if (typeof manifest.tunnelName !== "string" || manifest.tunnelName.length < 1 || manifest.tunnelName.length > 100) fail("safeManifest.tunnelName is invalid");
   if (/^[A-Za-z]:[\\/]|(?:^|[\\/])Users[\\/]/iu.test(manifest.tunnelName)) fail("safeManifest.tunnelName must not contain a personal path");
-  if (!new Set(["existing", "other_registrar", "namesilo_referral", "namesilo_no_referral"]).has(manifest.domainChoice)) {
+  if (!new Set(["existing", "other_registrar", "namesilo_no_referral"]).has(manifest.domainChoice)) {
     fail("safeManifest.domainChoice is invalid");
   }
   if (!Array.isArray(manifest.officialDocs) || manifest.officialDocs.length === 0) fail("safeManifest.officialDocs must not be empty");

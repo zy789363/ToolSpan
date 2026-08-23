@@ -22,7 +22,6 @@ export type SetupStatus =
 export type DomainChoice =
   | "existing"
   | "other_registrar"
-  | "namesilo_referral"
   | "namesilo_no_referral";
 
 export interface SetupManifestDraft {

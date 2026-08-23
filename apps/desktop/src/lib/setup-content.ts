@@ -9,7 +9,6 @@ export interface CommercialSetupContent {
   current: boolean;
   example: string | null;
   coupon: string | null;
-  referralUrl: string;
   directUrl: string;
 }
 
@@ -38,7 +37,6 @@ export function commercialSetupContent(now = new Date()): CommercialSetupContent
       ? `.${namesiloOffer.exampleTld} first year $${namesiloOffer.firstYearRegistrationUsd.toFixed(2)}; illustrative eligible subtotal $${namesiloOffer.illustrativeEligibleTotalUsd.toFixed(2)}`
       : null,
     coupon: current ? namesiloOffer.affiliateCouponCode : null,
-    referralUrl: commercialLinks.links.search.referral,
     directUrl: commercialLinks.links.search.direct,
   };
 }

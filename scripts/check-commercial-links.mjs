@@ -89,16 +89,11 @@ export function validateCommercialLinks(value) {
 
   const expectedPaths = { home: "/", search: "/domain/search-domains", pricing: "/pricing" };
   for (const [name, expectedPath] of Object.entries(expectedPaths)) {
-    const pair = value.links[name];
-    exactKeys(pair, ["referral", "direct"], `commercialLinks.links.${name}`);
-    const referral = httpsUrl(pair.referral, `commercialLinks.links.${name}.referral`, "www.namesilo.com");
-    const direct = httpsUrl(pair.direct, `commercialLinks.links.${name}.direct`, "www.namesilo.com");
-    if (referral.pathname !== expectedPath || direct.pathname !== expectedPath) {
+    const link = value.links[name];
+    exactKeys(link, ["direct"], `commercialLinks.links.${name}`);
+    const direct = httpsUrl(link.direct, `commercialLinks.links.${name}.direct`, "www.namesilo.com");
+    if (direct.pathname !== expectedPath) {
       fail(`commercialLinks.links.${name} must preserve the expected NameSilo path`);
-    }
-    const referralParameters = [...referral.searchParams.entries()];
-    if (referralParameters.length !== 1 || referralParameters[0][0] !== "rid" || referralParameters[0][1] !== value.affiliateId) {
-      fail(`commercialLinks.links.${name}.referral must contain exactly the declared rid`);
     }
     if (direct.search !== "" || direct.searchParams.has("rid")) {
       fail(`commercialLinks.links.${name}.direct must contain no query or referral attribution`);

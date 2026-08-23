@@ -39,7 +39,7 @@ describe("Setup Center", () => {
     expect(screen.queryByText("Loading current state…")).toBeNull();
   });
 
-  it("keeps all four paths visible and provides equal referral/no-referral, manual, and agent paths", async () => {
+  it("keeps the no-referral path and manual/agent paths visible after referral removal", async () => {
     const user = userEvent.setup();
     const { container } = await renderApp({ page: "setup" });
     await screen.findByRole("heading", { level: 1, name: "Setup Center" });
@@ -48,14 +48,9 @@ describe("Setup Center", () => {
       const query = { name: new RegExp(name, "iu") };
       expect(index === 0 ? await screen.findByRole("button", query) : screen.getByRole("button", query)).toBeTruthy();
     }
-    const support = screen.getByRole("link", { name: /NameSilo — Support ToolSpan/iu });
+    expect(screen.queryByRole("link", { name: /NameSilo — Support ToolSpan/iu })).toBeNull();
     const noReferral = screen.getByRole("link", { name: /NameSilo — No referral/iu });
-    expect(support.className).toBe(noReferral.className);
-    expect(support.getAttribute("href")).toContain("rid=1373371gm");
     expect(noReferral.getAttribute("href")).not.toContain("rid=");
-    await user.click(support);
-    expect(screen.getByText(/Offer snapshot is stale or unavailable/iu)).toBeTruthy();
-    expect(screen.queryByText(/affiliate-only coupon toolspan/iu)).toBeNull();
     await user.click(noReferral);
     expect(screen.queryByText(/affiliate-only coupon toolspan/iu)).toBeNull();
     expect(screen.getByText(/text-only NameSilo card/iu)).toBeTruthy();

@@ -9,7 +9,7 @@ Scoped API Token 为推荐模式；Global API Key 是 Advanced / Legacy 且要�
 Dry Run 必须列出 created/reused/updated/untouched、冲突、rollback precondition 和第二次运行 duplicates=0 的预期。未知 Tunnel/DNS 一律停止，不覆盖。运行凭证只交给官方 cloudflared 机制。
 
 <!-- setup-checkpoints:start -->
-1. `AFFILIATE_CHOICE` — PAUSE：让用户选择已有域名、任意 registrar、NameSilo referral 或 no-referral；不预选、不打开、不用券。
+1. `AFFILIATE_CHOICE` — PAUSE：让用户选择已有域名、任意 registrar 或 NameSilo no-referral；不预选、不打开、不用券。
 2. `LOGIN` — PAUSE：用户接管 Cloudflare/registrar 登录、CAPTCHA 与 2FA；Agent 不观察或记录凭证。
 3. `SECRET_ENTRY` — PAUSE：用户在本地 masked field 输入 credential；Agent 不读取、截图、回显或复制。
 4. `CLOUDFLARE_APPLY` — PAUSE：展示 Dry Run；Tunnel/DNS Apply、NameSilo 最终 Save、UAC、rotate/revoke 前由用户确认。

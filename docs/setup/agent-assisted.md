@@ -19,13 +19,13 @@ generatedAt
 
 禁止加入 Cloudflare Token/Key、runtime credential、owner password/hash、OAuth token/code、email、真实 config/state DB、任意文件内容、不必要的个人路径、浏览器 DOM、截图或 shell history。`expectedToolCount` 固定为 27；`localUrl` 只能是 loopback；公网 URL 必须为同一目标 hostname 的 HTTPS URL。
 
-`schemaVersion` 固定为 `1.0`。`domainChoice` 只允许 `existing`、`other_registrar`、`namesilo_referral`、`namesilo_no_referral`；Setup session/snapshot 自身的 `setupProtocolVersion` 不得复制进 Safe Manifest。
+`schemaVersion` 固定为 `1.0`。`domainChoice` 只允许 `existing`、`other_registrar`、`namesilo_no_referral`（referral 路径已移除）；Setup session/snapshot 自身的 `setupProtocolVersion` 不得复制进 Safe Manifest。
 
 ## 六个强制 checkpoint
 
 每个 `docs/prompts/*.md` 都按以下顺序声明 checkpoint。即使某个动作对当前 prompt 不适用，也要显式标为 `NOT_APPLICABLE`，不能静默跳过：
 
-1. `AFFILIATE_CHOICE` — 用户选择已有域名、任意 registrar、referral 或 no-referral；Agent 不预选、不打开、不用券。
+1. `AFFILIATE_CHOICE` — 用户选择已有域名、任意 registrar 或 no-referral；无 referral 路径；Agent 不预选、不打开、不用券。
 2. `LOGIN` — 用户接管登录、CAPTCHA 与 2FA；Agent 不读密码管理器、剪贴板历史或 DOM secret。
 3. `SECRET_ENTRY` — 用户在本地 masked field 输入 Secret；Agent 不读取、截图、回显、复制或放入命令行。
 4. `CLOUDFLARE_APPLY` — 展示 Dry Run；创建/更新/删除、nameserver 最终 Save 与 UAC 前暂停确认。

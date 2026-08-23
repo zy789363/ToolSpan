@@ -664,11 +664,11 @@ test("04 Release matrix is exact and missing evidence never becomes PASS", async
   assert.deepEqual(readiness.requiredPending, ["E-OWNER-01", "E-GH-01", "E-WIN-01", "E-HOST-01", "E-CODEX-01"]);
   assert.deepEqual(readiness.activeConditionalPending.map((entry) => entry.id), [
     "E-CF-TOKEN-01",
-    "E-CF-WIN-01",
-    "E-AFF-01",
     "E-DATA-01",
   ]);
-  assert.deepEqual(readiness.inactiveConditionalFallbacks.map((entry) => entry.id), ["E-ASSET-01"]);
+  assert.deepEqual(readiness.inactiveConditionalFallbacks.map((entry) => entry.id), [
+    "E-CF-WIN-01", "E-AFF-01", "E-ASSET-01",
+  ]);
 
   assert.equal(validateManualGateEvidence({
     schemaVersion: "1.0",
@@ -1045,11 +1045,30 @@ test("active conditional claims prevent false RELEASE_READY after every mandator
   assert.equal(readiness.releaseReady, false);
   assert.deepEqual(readiness.activeConditionalPending.map((entry) => entry.condition), [
     "ONE_CLICK_CLOUDFLARE_VALIDATED",
-    "WINDOWS_ONE_CLICK_VALIDATED",
-    "COMMERCIAL_CTA_CURRENT",
     "NUMERIC_OPENAI_QUOTA_CLAIM",
   ]);
   assert.ok(readiness.activeConditionalPending.every((entry) => RELEASE_CLAIM_POLICY[entry.condition].active));
+  assert.deepEqual(readiness.inactiveConditionalFallbacks.map((entry) => entry.id), [
+    "E-CF-WIN-01", "E-AFF-01", "E-ASSET-01",
+  ]);
+});
+
+test("WINDOWS_ONE_CLICK_VALIDATED is inactive because Desktop uses the manual cloudflared boundary", () => {
+  assert.equal(RELEASE_CLAIM_POLICY.WINDOWS_ONE_CLICK_VALIDATED.active, false);
+  assert.equal(
+    RELEASE_CLAIM_POLICY.WINDOWS_ONE_CLICK_VALIDATED.basis,
+    "WINDOWS_SETUP_USES_MANUAL_CLOUDFLARED_ONLY",
+  );
+  const gates = RELEASE_GATE_MATRIX.map((gate) => ({
+    id: gate.id,
+    required: gate.required,
+    status: gate.required === "WINDOWS_ONE_CLICK_VALIDATED" ? "BLOCKED_BY_ENVIRONMENT" : "PASS",
+  }));
+  const readiness = summarizeReleaseReadiness(gates);
+  assert.deepEqual(readiness.requiredPending, []);
+  assert.deepEqual(readiness.activeConditionalPending, []);
+  assert.ok(readiness.inactiveConditionalFallbacks.some((entry) => entry.id === "E-CF-WIN-01"));
+  assert.equal(readiness.releaseReady, true);
 });
 
 test("incomplete official OpenAI coverage deactivates numeric quota claims only through fallback", () => {
@@ -1061,7 +1080,7 @@ test("incomplete official OpenAI coverage deactivates numeric quota claims only 
     policy.NUMERIC_OPENAI_QUOTA_CLAIM.basis,
     "OFFICIAL_SOURCE_COVERAGE_INCOMPLETE_STALE_FALLBACK",
   );
-  assert.equal(policy.COMMERCIAL_CTA_CURRENT.active, true);
+  assert.equal(policy.COMMERCIAL_CTA_CURRENT.active, false);
 
   const gates = RELEASE_GATE_MATRIX.map((gate) => ({
     id: gate.id,

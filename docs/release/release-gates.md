@@ -44,12 +44,12 @@ SBOM 从根 `package-lock.json`、Desktop 独立 `package-lock.json` 和 `cargo 
 | `E-SIGN-01` | 可选 unsigned | `NOT_CONFIGURED` |
 | `E-CF-TOKEN-01` | one-click Cloudflare claim 前必需 | `PASS`；scoped-token API lifecycle + public HTTPS/OAuth/exact27 + owned cleanup 闭集证据已验证 |
 | `E-CF-GLOBAL-01` | 非 Release 必需 | `EXTERNAL_GATE_PENDING` |
-| `E-CF-WIN-01` | Windows one-click claim 前必需 | `BLOCKED_BY_ENVIRONMENT` |
+| `E-CF-WIN-01` | Windows one-click claim 前必需 | `BLOCKED_BY_ENVIRONMENT`；源码工具链就绪（`scripts/cloudflared-service-lifecycle.ps1` + `uninstall-cloudflared-service.ps1` + 静态测试 + `docs/release/windows-cloudflared-service-validation.md`）。2026-08-23 Owner 决定跳过真实 admin VM 验证，同时将 `WINDOWS_ONE_CLICK_VALIDATED` claim 置为 `inactive`（basis=`WINDOWS_SETUP_USES_MANUAL_CLOUDFLARED_ONLY`）——Desktop 实际使用 manual cloudflared adapter，不承诺自动安装 Windows service，故本 gate 不再阻塞 `RELEASE_READY`；若未来重新宣传 Windows one-click cloudflared，必须先恢复 claim active 并补齐验证 |
 | `E-HOST-01` | Release 必需 | `PASS`；Inspector 2.3.0 OAuth/exact 27/read/write/job/read-only rejection 闭集证据已验证 |
 | `E-CODEX-01` | Release 必需 | `PASS`；真实 Codex remote OAuth/exact 27/read/write/job/hash isolation/cleanup proof 已验证 |
 | `E-CGPT-UI-01` | 非 Release 必需 | `EXTERNAL_GATE_PENDING`（UI capability 已观察；连接/OAuth/tool scan 未完成） |
 | `E-OAUTH-SOAK-01` | 非 Release 必需 | `NOT_REQUIRED` |
-| `E-AFF-01` | 商业 CTA 前必需 | `STALE_FALLBACK`；价格、折扣、合计与 coupon 已隐藏，但 referral CTA 仍使 claim active |
+| `E-AFF-01` | 商业 CTA 前必需 | `STALE_FALLBACK`；2026-08-23 referral CTA 已完整移除，`COMMERCIAL_CTA_CURRENT` claim 置为 `inactive`（basis=`REFERRAL_CTA_REMOVED`），E-AFF-01 不再阻塞 `RELEASE_READY`；若未来重新引入 referral/推广路径，必须先恢复 claim active 并补齐当前性验证 |
 | `E-ASSET-01` | Logo/Banner 前必需 | `TEXT_ONLY_FALLBACK` |
 | `E-DATA-01` | OpenAI 数字展示前必需 | `STALE_FALLBACK`；官方来源覆盖不完整，具体数字与 MCP plan matrix 已隐藏 |
 
@@ -59,13 +59,13 @@ Conditional gate 不能仅因 `blockingFor` 使用条件名称就被 readiness �
 
 ```text
 ONE_CLICK_CLOUDFLARE_CLAIM     active
-WINDOWS_ONE_CLICK_CLAIM        active（Setup UI/claim 存在时保守启用）
-COMMERCIAL_CTA                 active
+WINDOWS_ONE_CLICK_CLAIM        inactive（WINDOWS_SETUP_USES_MANUAL_CLOUDFLARED_ONLY；2026-08-23 Owner 跳过 admin VM 验证后停用）
+COMMERCIAL_CTA                 inactive（REFERRAL_CTA_REMOVED；2026-08-23 移除 referral 路径后停用）
 NUMERIC_OPENAI_QUOTA_CLAIM     inactive（OFFICIAL_SOURCE_COVERAGE_INCOMPLETE_STALE_FALLBACK）
 LOGO_OR_BANNER                 inactive（TEXT_ONLY_FALLBACK active）
 ```
 
-`RELEASE_READY` 要求 `requiredPending` 与 `activeConditionalPending` 同时为空。未知 claim policy 也按 active 保守处理。`E-ASSET-01=TEXT_ONLY_FALLBACK` 与 `E-DATA-01=STALE_FALLBACK` 会进入 `inactiveConditionalFallbacks`，不会阻塞；一旦产品重新启用 Logo/Banner 或显示 OpenAI 数字/MCP plan matrix，必须先恢复对应 active policy 并提供 `PASS` 证据。
+`RELEASE_READY` 要求 `requiredPending` 与 `activeConditionalPending` 同时为空。未知 claim policy 也按 active 保守处理。`E-CF-WIN-01=BLOCKED_BY_ENVIRONMENT`、`E-AFF-01=STALE_FALLBACK`、`E-ASSET-01=TEXT_ONLY_FALLBACK` 与 `E-DATA-01=STALE_FALLBACK` 会进入 `inactiveConditionalFallbacks`，不会阻塞；一旦产品重新宣传 Windows one-click cloudflared、referral/推广路径、Logo/Banner 或显示 OpenAI 数字/MCP plan matrix，必须先恢复对应 active policy 并提供 `PASS` 证据。
 
 手工证据只从 `.toolspan-dev/evidence/external/<Requirement-ID>.json` 读取。非 `PASS` 使用六字段闭集 envelope：`schemaVersion`、`requirementId`、`status`、`observedAt`、`sanitized`、`secretValues`。`PASS` 必须额外包含 gate-specific 闭集 `proof`；Windows/签名/cloudflared 绑定当前 dry-run 的版本与 MSI/NSIS SHA-256，Codex/Inspector/Cloudflare 分别验证远端隔离、完整协议序列或完整资源生命周期。14 个 gate 均有冻结时效，未来、过期、空壳和旧 artifact evidence 一律回退，`externalGatesPromotedWithoutEvidence` 由真实矩阵计算。该机制仍不替代真实操作与人工审查。
 
@@ -167,12 +167,12 @@ E-HOST-01       PASS                    proofValidated=true
 E-CODEX-01      PASS                    proofValidated=true
 E-CGPT-UI-01    EXTERNAL_GATE_PENDING   proofValidated=false
 E-OAUTH-SOAK-01 NOT_REQUIRED            proofValidated=false
-E-AFF-01        STALE_FALLBACK          proofValidated=false
+E-AFF-01        STALE_FALLBACK          proofValidated=false（2026-08-23 已随 referral CTA 移除转为 inactive claim，见下文）
 E-ASSET-01      TEXT_ONLY_FALLBACK      proofValidated=false
 E-DATA-01       STALE_FALLBACK          proofValidated=false
 ```
 
-Required blockers: none。Active conditional blockers: `E-CF-WIN-01`、`E-AFF-01`。`E-AFF-01=STALE_FALLBACK` 仍 active，因为 referral CTA 保留；审计证据为 `.toolspan-dev/evidence/namesilo-currentness-20260822T063449Z.json`。`E-ASSET-01=TEXT_ONLY_FALLBACK` 与 `E-DATA-01=STALE_FALLBACK` 属于 inactive conditional fallback；OpenAI 审计证据为 `.toolspan-dev/evidence/openai-data-currentness-20260822T055319Z.json`。
+Required blockers: none。Active conditional blockers: 无（`E-CF-WIN-01`、`E-AFF-01` 均已随 claim 停用转为 inactive；`E-ASSET-01=TEXT_ONLY_FALLBACK` 与 `E-DATA-01=STALE_FALLBACK` 属于 inactive conditional fallback）。历史审计证据为 `.toolspan-dev/evidence/namesilo-currentness-20260822T063449Z.json` 与 `.toolspan-dev/evidence/openai-data-currentness-20260822T055319Z.json`。
 
 Owner 于 2026-08-22 批准采用 Apache License 2.0，并进一步明确批准 publication、IP rights 与 trademark 四项闭集声明；`LICENSE` 为 Apache 官方完整文本，规范化 SHA-256 为 `58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd`，npm package/lock/shrinkwrap 元数据均为 SPDX ID `Apache-2.0`。闭集 proof 为 `.toolspan-dev/evidence/external/E-OWNER-01.json`；Release verifier 已确认 `E-OWNER-01=PASS`、`proofValidated=true`。
 

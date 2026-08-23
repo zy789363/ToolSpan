@@ -365,7 +365,7 @@
     {
       "id": "S-DOMAIN-01",
       "stage": "SETUP",
-      "summary": "Existing-domain, any-registrar, referral and no-referral paths remain equally available",
+      "summary": "Existing-domain, any-registrar and no-referral paths remain equally available",
       "gateType": "deterministic",
       "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
       "verificationCommand": "npm run check:commercial-links"
@@ -373,7 +373,7 @@
     {
       "id": "S-AFF-01",
       "stage": "SETUP",
-      "summary": "Referral and coupon attribution have adjacent disclosure while the direct path contains no referral parameter",
+      "summary": "No-referral path contains no referral parameter or coupon attribution",
       "gateType": "deterministic",
       "blockingFor": ["SETUP_IMPLEMENTATION_COMPLETE"],
       "verificationCommand": "npm run check:affiliate-disclosure"

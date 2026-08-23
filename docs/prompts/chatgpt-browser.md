@@ -7,7 +7,7 @@
 先确认 MCP Inspector 已真实通过，再检查 Developer mode/connection UI。扫描工具必须恰好 27；先跑 read-only prompt。write 能力被套餐/策略阻止时记录 `BLOCKED_BY_HOST_PLAN_OR_POLICY`，由 Codex 真实 MCP E2E 承担 write/job gate，不修改 Tool Contract。
 
 <!-- setup-checkpoints:start -->
-1. `AFFILIATE_CHOICE` — NOT_APPLICABLE；确认没有因 Host 流程自动打开 registrar/referral 或使用 coupon。
+1. `AFFILIATE_CHOICE` — NOT_APPLICABLE；ToolSpan 不展示 referral 路径，确认没有自动打开 registrar 商业链接或使用 coupon。
 2. `LOGIN` — PAUSE：用户接管 ChatGPT 登录、CAPTCHA 与 2FA；Agent 不读取凭证或 session secret。
 3. `SECRET_ENTRY` — PAUSE：若 UI 请求 credential，由用户本地输入；Agent 不读取、截图、回显或复制。
 4. `CLOUDFLARE_APPLY` — NOT_APPLICABLE；若公网 endpoint 尚未验证则停止并回到独立 Cloudflare Dry Run。
