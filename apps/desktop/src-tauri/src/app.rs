@@ -1,14 +1,27 @@
 use std::sync::Arc;
 
 use serde_json::json;
+use tauri::image::Image;
 use tauri::menu::{MenuBuilder, MenuItem};
 use tauri::path::BaseDirectory;
-use tauri::tray::TrayIconBuilder;
+use tauri::tray::{MouseButton, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
 use crate::commands::{DesktopPaths, DesktopState, tray_request_id};
 use crate::process::{FIXED_HOST_RESOURCE, HostReply};
 use crate::protocol::DesktopRequest;
+
+const TRAY_RUNNING_PNG: &[u8] = include_bytes!("../icons/tray-running.png");
+const TRAY_STOPPED_PNG: &[u8] = include_bytes!("../icons/tray-stopped.png");
+const TRAY_ATTENTION_PNG: &[u8] = include_bytes!("../icons/tray-attention.png");
+
+fn status_text(key: &str) -> &'static str {
+    match key {
+        "running" => "ToolSpan — Running",
+        "stopped" => "ToolSpan — Stopped",
+        _ => "ToolSpan — Attention",
+    }
+}
 
 pub fn run() {
     let app = tauri::Builder::default()
@@ -79,47 +92,36 @@ pub fn run() {
 
 fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
     let status = MenuItem::with_id(app, "status", "ToolSpan — Stopped", false, None::<&str>)?;
+    let show = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
+    let start = MenuItem::with_id(app, "start", "Start", true, None::<&str>)?;
+    let restart = MenuItem::with_id(app, "restart", "Restart", false, None::<&str>)?;
+    let stop = MenuItem::with_id(app, "stop", "Stop", false, None::<&str>)?;
+    let copy = MenuItem::with_id(app, "copy-mcp-url", "Copy MCP URL", false, None::<&str>)?;
+    let open_logs = MenuItem::with_id(app, "open-logs", "Open logs", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = MenuBuilder::new(app)
         .item(&status)
         .separator()
-        .text("show", "Show")
-        .text("start", "Start")
-        .text("restart", "Restart")
-        .text("stop", "Stop")
+        .item(&show)
         .separator()
-        .text("copy-mcp-url", "Copy MCP URL")
-        .text("open-logs", "Open logs")
+        .item(&start)
+        .item(&restart)
+        .item(&stop)
         .separator()
-        .text("quit", "Quit")
+        .item(&copy)
+        .item(&open_logs)
+        .separator()
+        .item(&quit)
         .build()?;
-    app.manage(TrayStatus {
-        item: status.clone(),
-    });
 
-    let status_for_menu = status.clone();
     let mut builder = TrayIconBuilder::with_id("toolspan-main")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id().as_ref() {
             "show" => show_main_window(app),
-            "start" => run_tray_runtime(
-                app,
-                "runtime.start",
-                "ToolSpan — Running",
-                status_for_menu.clone(),
-            ),
-            "restart" => run_tray_runtime(
-                app,
-                "runtime.restart",
-                "ToolSpan — Running",
-                status_for_menu.clone(),
-            ),
-            "stop" => run_tray_runtime(
-                app,
-                "runtime.stop",
-                "ToolSpan — Stopped",
-                status_for_menu.clone(),
-            ),
+            "start" => run_tray_runtime(app, "runtime.start", "running"),
+            "restart" => run_tray_runtime(app, "runtime.restart", "running"),
+            "stop" => run_tray_runtime(app, "runtime.stop", "stopped"),
             "copy-mcp-url" => {
                 let _ = app.emit("tray://copy-mcp-url", ());
             }
@@ -129,11 +131,28 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
             }
             "quit" => request_safe_quit(app),
             _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
         });
-    if let Some(icon) = app.default_window_icon().cloned() {
+    if let Ok(icon) = Image::from_bytes(TRAY_STOPPED_PNG) {
         builder = builder.icon(icon);
     }
-    builder.build(app)?;
+    let tray_icon = builder.build(app)?;
+    app.manage(TrayStatus {
+        status_item: status,
+        start_item: start,
+        restart_item: restart,
+        stop_item: stop,
+        copy_item: copy,
+        tray_icon,
+    });
     Ok(())
 }
 
@@ -145,12 +164,7 @@ fn show_main_window(app: &tauri::AppHandle) {
     }
 }
 
-fn run_tray_runtime(
-    app: &tauri::AppHandle,
-    method: &'static str,
-    success_status: &'static str,
-    status_item: MenuItem<tauri::Wry>,
-) {
+fn run_tray_runtime(app: &tauri::AppHandle, method: &'static str, success_key: &'static str) {
     let supervisor = Arc::clone(&app.state::<DesktopState>().supervisor);
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -165,8 +179,8 @@ fn run_tray_runtime(
         .await
         .ok()
         .flatten();
-        let (status, ok) = tray_runtime_result(result.as_ref(), success_status);
-        let _ = status_item.set_text(status);
+        let (status, ok) = tray_runtime_result(result.as_ref(), success_key);
+        update_tray_status(&app, if ok { success_key } else { "attention" });
         let _ = app.emit(
             "tray://runtime-result",
             json!({"method": method, "status": status, "ok": ok}),
@@ -176,13 +190,13 @@ fn run_tray_runtime(
 
 fn tray_runtime_result(
     reply: Option<&HostReply>,
-    success_status: &'static str,
+    success_key: &'static str,
 ) -> (&'static str, bool) {
     let ok = reply.is_some_and(|reply| {
         reply.response.get("ok").and_then(|value| value.as_bool()) == Some(true)
     });
     if ok {
-        (success_status, true)
+        (status_text(success_key), true)
     } else {
         ("ToolSpan — Attention", false)
     }
@@ -204,12 +218,30 @@ fn request_safe_quit(app: &tauri::AppHandle) {
 }
 
 struct TrayStatus {
-    item: MenuItem<tauri::Wry>,
+    status_item: MenuItem<tauri::Wry>,
+    start_item: MenuItem<tauri::Wry>,
+    restart_item: MenuItem<tauri::Wry>,
+    stop_item: MenuItem<tauri::Wry>,
+    copy_item: MenuItem<tauri::Wry>,
+    tray_icon: TrayIcon,
 }
 
 pub(crate) fn update_tray_status(app: &tauri::AppHandle, status: &str) {
     if let Some(state) = app.try_state::<TrayStatus>() {
-        let _ = state.item.set_text(status);
+        let running = status == "running";
+        let icon = match status {
+            "running" => TRAY_RUNNING_PNG,
+            "attention" => TRAY_ATTENTION_PNG,
+            _ => TRAY_STOPPED_PNG,
+        };
+        let _ = state.status_item.set_text(status_text(status));
+        let _ = state.start_item.set_enabled(!running);
+        let _ = state.restart_item.set_enabled(running);
+        let _ = state.stop_item.set_enabled(running);
+        let _ = state.copy_item.set_enabled(running);
+        if let Ok(image) = Image::from_bytes(icon) {
+            let _ = state.tray_icon.set_icon(Some(image));
+        }
     }
 }
 
@@ -238,19 +270,19 @@ mod tests {
         };
 
         assert_eq!(
-            tray_runtime_result(Some(&success), "ToolSpan — Running"),
+            tray_runtime_result(Some(&success), "running"),
             ("ToolSpan — Running", true)
         );
         assert_eq!(
-            tray_runtime_result(Some(&failure), "ToolSpan — Running"),
+            tray_runtime_result(Some(&failure), "running"),
             ("ToolSpan — Attention", false)
         );
         assert_eq!(
-            tray_runtime_result(Some(&malformed), "ToolSpan — Stopped"),
+            tray_runtime_result(Some(&malformed), "stopped"),
             ("ToolSpan — Attention", false)
         );
         assert_eq!(
-            tray_runtime_result(None, "ToolSpan — Stopped"),
+            tray_runtime_result(None, "stopped"),
             ("ToolSpan — Attention", false)
         );
     }

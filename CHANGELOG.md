@@ -4,6 +4,13 @@ All notable changes to ToolSpan are recorded here. Dates and release links are o
 
 ## [Unreleased]
 
+### Desktop 0.7.1 · Tray design brought to life
+
+- Tray icon now switches per Core state: `tray-running.png` (blue, --primary-500), `tray-stopped.png` (gray-400), `tray-attention.png` (warning); ICO 16/24/32 multi-size plus 32px PNG bundled at `apps/desktop/src-tauri/icons/`.
+- Menu items now reflect state: Start/Restart/Stop enabled per Core state, Copy MCP URL only when running, Show/Open logs/Quit always available.
+- Left-clicking the tray icon shows and focuses the main window (previously no-op).
+- Tauri `image-png` feature enabled for `Image::from_bytes` runtime decode; `app.rs build_tray`/`TrayStatus`/`update_tray_status` rewritten to manage menu item + icon + state text centrally; `commands.rs` call sites now pass state keys (`running`/`stopped`/`attention`).
+
 ### Desktop 0.7 · Remove Global API Key
 
 - Removes the Global API Key (legacy) setup path entirely: Core `CloudflareCredential` converges to the single `api_token` kind, the Rust credential vault drops `GlobalApiKey`, and the desktop protocol/schema accepts only `api_token`.

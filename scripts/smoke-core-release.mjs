@@ -128,8 +128,13 @@ try {
   const tarball = path.join(temporaryDirectory, packResult.filename);
   const installed = await npm([
     "install", "--ignore-scripts", "--omit=dev", "--audit=false", "--fund=false", tarball,
-  ], { cwd: consumer });
-  if (!installed.ok) throw new Error(`production install failed with exit code ${String(installed.code)}`);
+  ], { cwd: consumer, timeoutMilliseconds: 300_000 });
+  if (!installed.ok) {
+    throw new Error(
+      `production install failed with exit code ${String(installed.code)}`
+      + (installed.stderr ? `\n${installed.stderr.slice(-2000)}` : ""),
+    );
+  }
 
   const packageJson = JSON.parse(await readFile(path.join(projectRoot, "package.json"), "utf8"));
   const installedRoot = path.join(consumer, "node_modules", ...packageJson.name.split("/"));

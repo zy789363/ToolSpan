@@ -211,11 +211,9 @@ pub async fn desktop_invoke(
             .or_else(|| response.pointer("/result/state"))
             .and_then(Value::as_str)
         {
-            Some("running") => crate::app::update_tray_status(&app, "ToolSpan — Running"),
-            Some("stopped") => crate::app::update_tray_status(&app, "ToolSpan — Stopped"),
-            Some("attention" | "unavailable") => {
-                crate::app::update_tray_status(&app, "ToolSpan — Attention")
-            }
+            Some("running") => crate::app::update_tray_status(&app, "running"),
+            Some("stopped") => crate::app::update_tray_status(&app, "stopped"),
+            Some("attention" | "unavailable") => crate::app::update_tray_status(&app, "attention"),
             _ => {}
         }
     }
