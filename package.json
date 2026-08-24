@@ -1,6 +1,6 @@
 {
   "name": "toolspan-mcp",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Remote tools for AI agents.",
   "private": true,
   "license": "Apache-2.0",

@@ -18,7 +18,7 @@ const testCredential = { kind: "api_token" as const, token: "test-management-tok
 
 function setupManifest(overrides: Partial<SetupManifestDraft> = {}): SetupManifestDraft {
   return {
-    toolSpanVersion: "0.7.0",
+    toolSpanVersion: "0.7.1",
     instanceName: "Local test",
     localUrl: "http://127.0.0.1:8787",
     desiredHostname: "mcp.example.test",
@@ -114,7 +114,7 @@ describe("SetupService", () => {
       zoneName: "example.test",
       credential,
       manifest: {
-        toolSpanVersion: "0.7.0",
+        toolSpanVersion: "0.7.1",
         instanceName: "Local test",
         localUrl: "http://127.0.0.1:8787",
         desiredHostname: "mcp.example.test",
@@ -157,7 +157,7 @@ describe("SetupService", () => {
       zoneName: "example.test",
       credential,
       manifest: {
-        toolSpanVersion: "0.7.0",
+        toolSpanVersion: "0.7.1",
         instanceName: "Local test",
         localUrl: "http://127.0.0.1:8787",
         desiredHostname: "mcp.example.test",
@@ -194,7 +194,7 @@ describe("SetupService", () => {
       zoneName: "example.test",
       credential,
       manifest: {
-        toolSpanVersion: "0.7.0",
+        toolSpanVersion: "0.7.1",
         instanceName: "Local test",
         localUrl: "http://127.0.0.1:8787",
         desiredHostname: "mcp.example.test",

@@ -140,7 +140,7 @@ test("Tauri shipping resources can start the fixed Desktop host and answer syste
   assert.equal(response.id, "1");
   assert.equal(response.ok, true);
   assert.equal(response.result.protocolVersion, 1);
-  assert.equal(response.result.productVersion, "0.7.0");
+  assert.equal(response.result.productVersion, "0.7.1");
   assert.equal(FIXED_DESKTOP_HOST_RESOURCE, "desktop-host/main.js");
 });
 

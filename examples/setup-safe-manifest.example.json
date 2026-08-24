@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "toolSpanVersion": "0.7.0",
+  "toolSpanVersion": "0.7.1",
   "instanceName": "owner-confirmed-instance",
   "localUrl": "http://127.0.0.1:8787",
   "desiredHostname": "mcp.aiqushi.top",
