@@ -398,3 +398,17 @@ Remaining（不阻塞 `RELEASE_READY`）：
 5. **正式 tag + Release**：`git tag v0.7.0`（→`ce4d7d2`）已推送；`gh release create v0.7.0`（publishedAt 2026-08-23T17:12:15Z）→ https://github.com/zy789363/ToolSpan/releases/tag/v0.7.0，资产 6 项。
 
 至此 v0.7.0 发布闭环完成：Global API Key 完全移除（全库 grep 归零，仅保留历史 dated 记录）+ 全部验证绿 + 安装包实装 + tag + Release。
+
+---
+
+## 2026-08-24 · v0.7.1 托盘设计落地 + 发布
+
+背景：托盘此前从未进入设计系统（参考原型已删且回收站无记录），按 v2 设计语言补写规范并落地实现，随后升版 0.7.1 发布。
+
+1. **设计规范**：`docs/desktop-design-v2.md` 新增第 7 章「系统托盘」（唯一设计事实源）：token（`--tray-active #3b82f6`/`--tray-idle #9ca3af`/`--tray-attention #f59e0b`）、图标规格（16/24/32px ICO + 32px PNG、状态=整体色）、菜单结构（4 分组 + 启用/禁用态）、交互（左键显示窗口/Quit 确认）、无障碍、实现对照矩阵。
+2. **实现（commit `3dc375c`）**：`app.rs` `build_tray`/`TrayStatus`/`update_tray_status` 重写——三态图标 `set_icon`（running/stopped/attention）、`MenuItem::set_enabled` 状态绑定（Start↔Stop 互斥、Copy 仅 running）、`on_tray_icon_event` 左键 → `show_main_window`；`commands.rs` 调用点传状态键；tauri 启用 `image-png` feature；`smoke-core-release.mjs` 错误诊断附 stderr。
+3. **验证**：cargo fmt/check/clippy（无 warning）/test 49/49；`check:desktop:security` 11 项；**verify:desktop:source 16/16 PASS**；**verify:release PASS / releaseReady=true**（dry-run 82 files、SBOM 770）。
+4. **E-WIN-01（0.7.1：MSI `ba81d937…`、NSIS `e3e1c928…`）**：卸载 0.7.0 → 装 0.7.1 → 启动/WebView2 0.7.1/Desktop Host → Owner 确认托盘（状态图标/菜单禁用态/左键）→ 退出路径与 v0.7.0 零 diff（v0.7.0 干净退出已验证）。**已知观察**：Core stopped 状态下托盘 Quit 的 runtime.stop 握手可能挂起（Core/desktop-host 层，非托盘回归），Owner 决策按现状发布并已记入 release notes。证据 `windows-native-smoke-20260824T114433Z.json`。
+5. **正式 tag + Release**：`git tag v0.7.1`（→`814167d`）已推送；`gh release create v0.7.1`（publishedAt 2026-08-24T11:59:31Z）→ https://github.com/zy789363/ToolSpan/releases/tag/v0.7.1，资产 6 项。
+
+至此 v0.7.1 发布闭环完成：托盘设计从零补写 → 落地 → 全量验证绿 → 实装确认 → tag + Release。
