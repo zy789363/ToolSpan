@@ -56,101 +56,9 @@ Host validation: EXTERNAL_GATE_PENDING
 
 ## 本轮验证记录
 
-阶段：`SETUP_v0.5`
+阶段：`SETUP_v0.5`（`SETUP_IMPLEMENTATION_COMPLETE`）。该快照已被 release-gates.md 中的 `2026-08-23 releaseReady 收敛记录` 与 v0.7.0 / v0.7.1 正式 Release 记录收敛取代，当前权威口径以 [release-gates.md](release-gates.md) 为准。
 
-状态：`SETUP_IMPLEMENTATION_COMPLETE`
-
-提交 / 工作树：当前交付目录不含 `.git` 元数据；无法取得可信 commit、status 或 diff。未执行 reset、clean、tag、release 或自动提交。
-
-已通过的需求：
-
-```text
-S-LOCK-01          S-STATE-01       S-CRED-01         S-TUNNEL-CRED-01
-S-CF-MANUAL-01     S-CF-ZONE-01     S-CF-TOKEN-01
-S-CF-IDEMP-01      S-CF-ROLLBACK-01 S-CGPT-01         S-AGENT-01
-S-DOMAIN-01        S-AFF-01         S-AFF-02          S-ASSET-01
-S-URL-01           S-DIAG-01        S-MOCK-01         S-EXTENV-01
-S-PACK-01          S-OWNER-PROFILE-01                  S-BROWSER-NS-01
-```
-
-实际执行的命令：
-
-```text
-Node used for final gate                              v24.19.0
-npm run verify:setup                                  PASS（22 checks；SETUP_IMPLEMENTATION_COMPLETE）
-node --test scripts/tests/setup-verification.test.mjs PASS（9/9）
-npm run setup:test                                    PASS（4 files / 61 tests）
-npm run check:setup-docs                              PASS（10 documents / 9 manual steps）
-npm run check:setup-prompts                           PASS（5 prompts / 6 checkpoints each）
-npm run check:commercial-links                        PASS（CURRENT snapshot projection）
-node scripts/check-commercial-links.mjs --now=2026-09-21
-                                                       PASS（offer/guide/docs stale fallback）
-npm run check:affiliate-disclosure                    PASS（direct rid=0 / telemetry=0）
-npm run check:vendor-assets                           FALLBACK_PASS（TEXT_ONLY_FALLBACK）
-npm run smoke:setup-manifest                          PASS（81 files / 24 required / secret-like 0）
-npm run check:setup:security                          PASS（persisted credential 0 / secret value 0）
-npm --prefix apps/desktop run test -- tests/components/setup-page.test.tsx
-                                                       PASS（10/10）
-npm --prefix apps/desktop run typecheck               PASS
-npm --prefix apps/desktop run build                   PASS
-npm --prefix apps/desktop run check:i18n              PASS（3/3）
-npm --prefix apps/desktop run test:a11y               PASS（9/9）
-cargo fmt/check/clippy/test（通过 VS Developer PowerShell）
-                                                       PASS（Rust 40/40）
-npm run verify:core                                   PASS（24 files / 154 tests；27/27 tools）
-npm run verify:desktop:source                         PASS（15 checks；Renderer 31/31）
-npm run smoke:core-release                            PASS（81 packaged files）
-npm run goal:check                                    PASS（64 requirements / 55 deterministic）
-npm run check:ci                                      PASS（Setup Ubuntu/Windows jobs；Secret injection 0）
-git status --short                                    BLOCKED_BY_ENVIRONMENT（源码快照无 .git）
-git diff --check                                      BLOCKED_BY_ENVIRONMENT（源码快照无 .git）
-```
-
-Mock 场景已通过：`61/61` Setup tests；`setup-engine.test.ts` 包含 36 个显式场景声明，超过 root verifier 的 23 场景最低证据门槛。覆盖 active-zone gate、pagination、Cloudflare error envelope、429/Retry-After、create 不盲重放、same-name/DNS conflict、idempotency、crash/reentry、full/partial rollback、redaction 与 external blocker 语义。
-
-已修复的回归问题：
-
-- Windows 下 `tests/setup*.test.ts` 不会由 `shell: false` 展开；根 `setup:test` 改为 Vitest 的稳定 `setup` filter，并由验证器拒绝 shell glob。
-- Rust/Tauri `check` 依赖打包的 `dist/desktop-host/main.js`；`verify:setup` 现在先显式构建 Core/Desktop Host，再运行 Rust gates。
-- v0.5 Protocol 安全检查精确允许 7 个冻结 `setup.*` method；管理 credential 仅可作为 preflight/apply/rollback/reconcile 的可选 Rust→Host 注入，其他 request/response/event/snapshot/manifest/journal/receipt/log 或未知 secret field 均失败。
-- Setup loading/error 状态现在稳定呈现页面标题，消除 Desktop 全导航 integration regression；Renderer full suite 复跑通过。
-- `setup.discardCredential` 只清理 session credential，不删除非秘密 plan/receipt；credential re-entry 状态由 focused tests 覆盖。
-
-环境能力：
-
-```text
-CORE_CAPABLE: true（Node v24.19.0）
-DESKTOP_SOURCE_CAPABLE: true
-SETUP_MOCK_CAPABLE: true
-WINDOWS_PACKAGE_CAPABLE: true
-Rust / Cargo / rustfmt / clippy: available（1.94.1）
-Visual Studio 2022 Developer PowerShell: available
-Windows x64 / WebView2: available
-```
-
-环境阻塞项：
-
-- 默认 PATH Node 是 `v22.16.0`，低于 `>=22.17.0`；终局阶段验证显式使用现有 bundled Node `v24.19.0`，未修改系统 Node。
-- 当前源码快照无 `.git` 元数据，因此 Git status/diff 证据是 `BLOCKED_BY_ENVIRONMENT`，不是源码 PASS。
-- Vite 生产 bundle 约 610 kB，输出非阻塞 chunk-size warning；构建、功能和 a11y 门禁均通过。
-
-外部门禁：
-
-```text
-Cloudflare sandbox: EXTERNAL_GATE_PENDING
-Host validation: EXTERNAL_GATE_PENDING
-ChatGPT UI compatibility: EXTERNAL_GATE_PENDING
-Vendor asset currentness/rights: EXTERNAL_GATE_PENDING（TEXT_ONLY_FALLBACK active）
-```
-
-仍需 Owner 提供的输入：
-
-- 在 ToolSpan Desktop masked credential UI 本地输入 Cloudflare credential，再对 `aiqushi.top` / `mcp.aiqushi.top` 执行真实 preflight、Dry Run、人工确认、Apply、二次幂等与 owned-only cleanup；Secret 不进入聊天或命令行。
-- 用当前 ChatGPT 账号执行 UI compatibility smoke；套餐阻止时记录 `BLOCKED_BY_HOST_PLAN_OR_POLICY`，不购买 Business。
-- 由 Codex 在 synthetic workspace 完成真实 read/write/job Host gate。
-- Release 前重新核验 NameSilo/ChatGPT/Cloudflare snapshot currentness，并完成许可证、仓库、维护者联系方式与发布授权 Owner gates。
-
-已检查的安全不变量：
+本阶段留下的安全不变量仍有效：
 
 ```text
 Setup child process shell: false
@@ -168,10 +76,3 @@ CI external credential injection: 0
 Exact MCP Tool Contract: 27/27
 ```
 
-NameSilo offer: `CURRENT`（仅指 `verifiedAt: 2026-08-20` 的 owner-provided snapshot 仍在 30 天窗口；Release currentness 尚未外部复核）。
-
-ChatGPT guide: `CURRENT`（同样是 dated snapshot）；`2026-09-21` 模拟已证明 `STALE_GUIDE_FALLBACK` 会隐藏旧 UI path。
-
-下一阶段：`RELEASE / NATIVE / EXTERNAL VALIDATION`
-
-下一条明确命令：`npm run goal:preflight`

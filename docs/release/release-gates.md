@@ -80,79 +80,9 @@ LOGO_OR_BANNER                 inactive（TEXT_ONLY_FALLBACK active）
 
 ## 2026-08-22 当前权威验证记录
 
-阶段：`RELEASE_GATES`
+阶段：`RELEASE_GATES`（已被 2026-08-23 releaseReady 收敛及 v0.6.0 / v0.7.0 / v0.7.1 正式 Release 取代；以下保留当时的门禁证明指针，详细执行命令与 hash 见对应 release 证据文件）。
 
-状态：确定性源码与装配门禁 `PASS`；总体 `EXTERNAL_GATE_PENDING`；`releaseReady=false`。`verify:release` 没有把外部门禁伪装成自动 `PASS`。
-
-提交 / 工作树：当前交付目录已初始化本地 Git，未出生分支为 `main`，`origin` 指向私有空仓库 `zy789363/ToolSpan`。`HEAD` 不存在，未 commit、未 push、未执行 reset、clean、tag、publish 或 Release API。
-
-实际执行的命令：
-
-```text
-npm run goal:preflight         PASS；gitRepository/gitStatusAvailable/remoteConfigured=true
-npm run check:oss              PASS_WITH_OWNER_GATE；Apache-2.0 官方全文与 npm 元数据一致
-node --test scripts/tests/host-e2e-safety.test.mjs scripts/tests/release-scripts.test.mjs
-  PASS                         40/40 Host/Release focused tests
-node --test scripts/tests/cloudflare-e2e.test.mjs
-  PASS                         33/33 runner tests；未执行 Apply
-npm run e2e:mcp-inspector      PASS；official Inspector 2.3.0；exact 27/read/write/job；auth state removed
-npm run e2e:codex-remote       PASS；Codex 0.149.0-alpha.4.1；remote read/write/job；closed cleanup
-npm run verify:all:source      PASS
-  Core                         159/159；exact MCP Tool Contract 27/27
-  Desktop static/verifier      17/17
-  Renderer                     37/37
-  i18n                         3/3
-  accessibility                10/10
-  Rust                         50/50
-  Setup scenarios              62/62
-npm run verify:desktop:windows EXTERNAL_GATE_PENDING
-  native build                 PASS
-  install/lifecycle/isolation  PASS
-  direct system tray menu      NOT_PERFORMED
-Owner manual E-WIN-01          PASS；direct Tray smoke；current MSI/NSIS hash bound
-npm run release:dry-run        PASS
-npm run verify:release         EXTERNAL_GATE_PENDING
-  deterministicGates           testEnvironmentV2/allSource/releaseDryRun PASS
-  releaseReady                 false
-```
-
-发布证据（Release evidence）：
-
-```text
-latest dry-run                 run-20260822T141053722Z-d7d6def5
-latest verification            release-verification-20260822T141059199Z.json
-npm package files              83
-Desktop Renderer files         4
-current native artifacts       2
-stale/rejected artifacts       2
-SBOM components                764
-SPDX / CycloneDX               2.3 / 1.6；closed-schema semantic validation PASS
-tag created / published        false / false
-```
-
-`.toolspan-dev/evidence/release/latest.json` 保持 `scope=RELEASE_DRY_RUN_ASSEMBLY`、`dryRunOnly=true`；`.toolspan-dev/evidence/release/latest-verification.json` 指向上述 verification。该目录已被 `.gitignore` 覆盖。
-
-Windows 发布产物：
-
-```text
-ToolSpan_0.5.0_x64_en-US.msi
-  bytes                         4427776
-  sha256                        2c3554cf01f1ff19f0799a50b13a1db0327e471dee080ffa63d1dca0109ec310
-ToolSpan_0.5.0_x64-setup.exe
-  bytes                         3339802
-  sha256                        325d6e895efaa91b950fd55d44950e103aea95c75f0ab38922f45e442b87f21c
-toolspan-desktop.exe
-  bytes                         7197184
-  sha256                        fa7d2f58085604c083c1f58837c1f34a1bcb57a9c40d57eae83373559eb9fb4d
-  PE subsystem                  WINDOWS_GUI
-Authenticode                    NotSigned（E-SIGN-01=NOT_CONFIGURED，非阻塞）
-```
-
-Windows 真实 smoke 已完成当前安装器 UI、标准 per-user 安装、已安装 dashboard、Start/Restart/Stop、single-instance restore、确认退出、owned Host cleanup 与 unrelated external Node isolation。`toolspan-desktop.exe` 没有 Console 子窗口，运行态为 exact 27 tools。详细脱敏证据：`.toolspan-dev/evidence/windows-release-binary-20260822T051102Z.json`。
-
-Computer Use backend 仍只暴露目标窗口；该能力限制由 `.toolspan-dev/evidence/computer-use-tray-targeting-20260822T061954Z.json` 如实保留。Owner 随后于 2026-08-22 手工完成最终 Windows Tray smoke，并明确确认通过。确认记录 `.toolspan-dev/evidence/windows-tray-manual-20260822T130308Z.json` 与既有安装/生命周期/进程 evidence 合并，绑定 MSI `2c3554cf01f1ff19f0799a50b13a1db0327e471dee080ffa63d1dca0109ec310` 和 NSIS `325d6e895efaa91b950fd55d44950e103aea95c75f0ab38922f45e442b87f21c`；最新 Release verifier 已确认 `E-WIN-01=PASS`、`proofValidated=true`。
-
-外部门禁（以 `release-verification-20260822T163130909Z.json` 为准）：
+当时 `verify:release` 的外部门禁最终矩阵为：
 
 ```text
 E-OWNER-01      PASS                    proofValidated=true
@@ -170,23 +100,15 @@ E-ASSET-01      TEXT_ONLY_FALLBACK      proofValidated=false
 E-DATA-01       STALE_FALLBACK          proofValidated=false
 ```
 
-必需阻塞项：无。活跃条件阻塞项：无（`E-CF-WIN-01`、`E-AFF-01` 均已随 claim 停用转为 inactive；`E-ASSET-01=TEXT_ONLY_FALLBACK` 与 `E-DATA-01=STALE_FALLBACK` 属于 inactive conditional fallback）。历史审计证据为 `.toolspan-dev/evidence/namesilo-currentness-20260822T063449Z.json` 与 `.toolspan-dev/evidence/openai-data-currentness-20260822T055319Z.json`。
+当时闭集证据指针（仅供历史回溯，最新权威以 `.toolspan-dev/evidence/release/latest-verification.json` 为准）：
 
-Owner 于 2026-08-22 批准采用 Apache License 2.0，并进一步明确批准 publication、IP rights 与 trademark 四项闭集声明；`LICENSE` 为 Apache 官方完整文本，规范化 SHA-256 为 `58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd`，npm package/lock/shrinkwrap 元数据均为 SPDX ID `Apache-2.0`。闭集 proof 为 `.toolspan-dev/evidence/external/E-OWNER-01.json`；Release verifier 已确认 `E-OWNER-01=PASS`、`proofValidated=true`。
+- `E-OWNER-01` / `E-GH-01` / `E-WIN-01` / `E-CF-TOKEN-01` / `E-HOST-01` / `E-CODEX-01`：`.toolspan-dev/evidence/external/E-*-01.json`
+- Cloudflare API lifecycle / public e2e：`.toolspan-dev/evidence/cloudflare-e2e-20260822-cc6cd8b988.json`、`cloudflare-public-e2e-20260822-cc6cd8b988.json`
+- Codex remote e2e：`.toolspan-dev/evidence/codex-remote-e2e-202608221403547af16438e2.json`
+- Windows tray manual：`.toolspan-dev/evidence/windows-tray-manual-20260822T130308Z.json`
+- Freshness / Namesilo / OpenAI data：`.toolspan-dev/evidence/namesilo-currentness-20260822T063449Z.json`、`openai-data-currentness-20260822T055319Z.json`
 
-GitHub 插件与 `gh` CLI 均已连接账号 `zy789363`。2026-08-22 首个私有 `main` commit `e22d3414befa45162287eaed4bbd002e4d101e7f` 已推送；GitHub Free 明确拒绝私有仓库的 ruleset/branch protection，且 private vulnerability reporting 仅支持 public repository。由于 `E-OWNER-01` 已明确批准公开发布权且随后批准 `E-GH-01`，仓库 `zy789363/ToolSpan` 已转为 `PUBLIC`。远端回查确认默认分支为 `main`、根 `SECURITY.md` 存在、branch protection 启用 linear history/conversation resolution 并禁止 force push/deletion、`Protect main` ruleset 为 `active` 且包含 deletion/non-fast-forward/linear-history 三项规则、private vulnerability reporting 返回 `enabled=true`。闭集 proof 为 `.toolspan-dev/evidence/external/E-GH-01.json`；Release verifier 已确认 `E-GH-01=PASS`、`proofValidated=true`。未创建 tag 或 Release。
-
-首轮真实 GitHub clean-checkout CI 暴露并修复了四类仅在新仓库可见的问题：嵌套 `src/state` 被宽泛 ignore、CI 未从 example 初始化 gitignored goal state、runner 未安装 ripgrep、Windows/POSIX 路径与 checkout 行尾不一致；高负载 Windows integration tests 仅在 `CI=true` 时使用 15 秒有界 timeout，本地仍为 5 秒。代码 HEAD `894fc7bc3366bb2b77ad00b62eec84071cf98279` 的 GitHub Actions run `32581011705` 最终 7/7 jobs success：Core Ubuntu Node 22.17/24、Core Windows Node 24、Desktop source Ubuntu/Windows Node 24、Setup source Ubuntu/Windows Node 24；Windows Desktop 的 native build attempt 也成功。随后对同一代码 HEAD 运行完整 `verify:release`，dry-run evidence 为 `.toolspan-dev/evidence/release/run-20260822T153439306Z-b7d8a0b5`，verification evidence 为 `.toolspan-dev/evidence/release/release-verification-20260822T153445652Z.json`，`requiredPending=[]`、`externalGatesPromotedWithoutEvidence=0`、`tagCreated=false`、`published=false`。
-
-`E-HOST-01=PASS`：2026-08-22 的 `npm run e2e:mcp-inspector` 先验证无凭证 `auth_required / exit 3`，再由官方 Inspector 2.3.0 使用自身 PKCE、loopback callback 与两个随机临时 auth store 完成 full-scope/read-only 两条链。真实调用覆盖 initialize、exact 27、read、`apply_patch` dry-run/apply/readback、allowlisted job/poll/output 与 read-only 写拒绝；SDK 辅助链进一步确认 `_meta` 的 `insufficient_scope`。Password 未进入参数、环境、浏览器控制指令、日志或 evidence；两个 auth store 无论成功/失败均由 `finally` 删除，当前 `%TEMP%` 遗留数为 0。详细证据为 `.toolspan-dev/evidence/release-e-host-01.json`，闭集 proof 为 `.toolspan-dev/evidence/external/E-HOST-01.json`。
-
-`E-CODEX-01=PASS`：`npm run e2e:codex-remote` 使用 Cloudflare 官方签名的 `cloudflared 2026.8.2` 建立一次性 HTTPS Quick Tunnel，并以 Desktop-bundled Codex CLI `0.149.0-alpha.4.1` 的真实 Streamable HTTP OAuth/DCR 会话调用 ToolSpan。Codex 事件闭集覆盖 `devspace_info`、`open_workspace`、`read`、`apply_patch` dry-run/apply/readback、`start_job`、`poll_job` 与 job output；tool count 为 27。远程可写内容的 SHA-256 从 `50a3e798962c81bc11699808fd02831ed1ca3397f8b91dc365fd7a322fd06675` 变为 `c94a2c2a4ea4bb0b3d9f5da74a62ff140a29bd857b9d2ca559a58c7067bd9777`，本地 source fixture 前后保持 `50a3e798962c81bc11699808fd02831ed1ca3397f8b91dc365fd7a322fd06675`。详细证据为 `.toolspan-dev/evidence/codex-remote-e2e-202608221403547af16438e2.json`，闭集 proof 为 `.toolspan-dev/evidence/external/E-CODEX-01.json`；测试后 Codex OAuth/MCP entry、Quick Tunnel、ToolSpan process、synthetic workspace 和下载 binary 均已移除。
-
-Cloudflare 新鲜只读预检（fresh read-only preflight）`20260822-de7b39b2a0` 验证 Global Key、active Zone、零 DNS/tunnel collision，并生成三项 mutation 的 exact plan；`Apply attempted=false`，证据为 `.toolspan-dev/evidence/cloudflare-e2e-20260822-de7b39b2a0.json`。该可选的 Global legacy path 不能提升 active scoped-token gate，也没有获得 Apply 权限。Secret value 仍不得进入聊天、配置、Prompt、receipt、诊断或命令行。
-
-`E-CF-TOKEN-01=PASS`：Owner 在本地 `TOOLSPAN_E2E_CF_API_TOKEN` 环境变量配置 scoped token，test-environment 只保存变量名。session `20260822-cc6cd8b988` 的只读预检（read-only preflight）验证 `aiqushi.top=ACTIVE`、`mcp.aiqushi.top` 无 DNS/Tunnel collision，并绑定 plan hash `d2cf8f83f011f711b2cce807725fe4c9413850cef1de12c51837bac59852aba8`。经两次独立 Owner checkpoint，runner 创建 session Tunnel、配置 exact ingress、创建 proxied CNAME；独立 Reconcile 证明 duplicate create `0`、mutation delta `0`、Tunnel/DNS/fingerprint/ingress 全匹配。官方签名且 SHA-256 固定的 `cloudflared 2026.8.2` 使用 child-only `TUNNEL_TOKEN` 环境变量连接 Named Tunnel；打包后的 ToolSpan 在 `https://mcp.aiqushi.top` 完成 public health、OAuth discovery/authorization、官方 Inspector exact 27、read、write、job 与 insufficient-scope。随后 owned-only cleanup 按 DNS→复查→Tunnel 顺序完成，terminal Reconcile 再次只用 GET 确认 DNS/Tunnel 为 0。API lifecycle evidence 为 `.toolspan-dev/evidence/cloudflare-e2e-20260822-cc6cd8b988.json`，public evidence 为 `.toolspan-dev/evidence/cloudflare-public-e2e-20260822-cc6cd8b988.json`，闭集 proof 为 `.toolspan-dev/evidence/external/E-CF-TOKEN-01.json`；Secret values、credential argument/file/log/evidence findings 均为 0，临时 cloudflared binary 已删除。最新 verifier 已确认 `E-CF-TOKEN-01=PASS`、`proofValidated=true`。
-
-已检查的安全不变量：
+当时已检查的安全不变量（仍有效）：
 
 ```text
 exact MCP Tool Contract                    27/27
@@ -196,147 +118,7 @@ tag / publish side effects                 0
 MCP Client / Gateway / Agent Runtime / Shell added  0
 ```
 
-当前阶段：`RELEASE_GATES`（native / external validation）
-
-Windows 原生 Release 门禁已由当前 hash-bound install/lifecycle/process evidence 与 Owner 手工 Tray smoke 闭集收敛；没有剩余 `E-WIN-01` 动作。
-
-其余外部门禁依次使用真实环境继续：Cloudflare 仅在本地存在 scoped token 引用后重新执行 `npm run e2e:cloudflare -- --preflight`，并在独立动态确认前保持 Apply=false；Owner/GitHub/affiliate 门禁分别补齐自己的日期化 evidence。任何新证据写入后重新运行：
-
-```text
-npm run verify:release
-```
-
-## 2026-08-21 阻塞审计（历史，已被 2026-08-22 证据取代）
-
-本节仅保留当时的审计轨迹，不代表当前 credential、artifact 或 gate 状态。
-
-同一 Owner 输入条件已连续三次 goal turn 出现。最终只读检查：
-
-```text
-TOOLSPAN_E2E_CF_GLOBAL_EMAIL  Process=false / User=false / Machine=false
-CloudFlareAPIKEY              present=true（只检查名称存在，不读取 value）
-TOOLSPAN_E2E_CF_API_TOKEN     Process=false / User=false / Machine=false
-
-npm run e2e:cloudflare -- --preflight
-  status                      NEEDS_HUMAN_CHECKPOINT
-  reason                      GLOBAL_KEY_EMAIL_ENV_VALUE_REQUIRED
-  apiRequests                 0
-  Apply attempted             false
-  runner-specific reflection scan PASS
-  evidence                    .toolspan-dev/evidence/cloudflare-e2e-20260820-48001cae77.json
-```
-
-该旧阻塞已由后续本地 email 设置与正确 Global API Key 替换解决。
-
-## 2026-08-21 恢复执行记录（历史，已被 2026-08-22 证据取代）
-
-本节中的 hash、测试数量与 Windows 覆盖只适用于当时快照。
-
-第一次恢复时以不回显 value 的格式确认旧值实际为 User API Token，并发现缺 Tunnel 权限。Owner 随后将 `CloudFlareAPIKEY` 替换为正确 Global API Key；manifest 已切回 `GLOBAL_API_KEY`，Secret value 未进入 manifest、日志或 evidence。
-
-```text
-VERIFY_GLOBAL_KEY    200 PASS
-RESOLVE_ZONE         200 PASS（ACTIVE）
-INSPECT_DNS          200 PASS（recordCount 0 / collision false）
-INSPECT_TUNNELS      200 PASS（prefixedCount 0 / collision false）
-credentialVerified  true
-Dry Run              DRY_RUN_READY / mutationCount 3
-planHash             61ec90917349b8bd445b25eca111e89238064b5c2249a67dd5d74b3dc6ed22d8
-Apply attempted      false
-runner-specific reflection scan PASS
-evidence             .toolspan-dev/evidence/cloudflare-e2e-20260821-ee93a77b22.json
-```
-
-Windows production NSIS 的旧 binary 经 Computer Use 显示安装完成并成功打开 ToolSpan First Run；受控 `remote-workspace` 由原生 picker 登记。真实启动发现 Node 不可用时 error page 无法进入 Settings 的 recovery dead-end；新增 native Node picker recovery 后，成功/拒绝 focused 7/7、Renderer 33/33、Desktop source verification 和 production bundle 均 PASS。路径修复前的历史 NSIS（SHA-256 `3bb0aa57e0ff0f236967c92d0e4d1c0dd0099f8bd749dd9701aa2e1967b7fdcd`）实测在物理 Esc 后暂停；它不是当前 shipping artifact。其安装与进程隔离 pending 状态已由 2026-08-22 当前-hash smoke 取代，只有直接系统托盘菜单 smoke 仍未执行。
-
-## 2026-08-21 恢复后的第三次阻塞审计（历史，已被 2026-08-22 证据取代）
-
-自动源码、production assembly 与 Release verifier 均已收敛；post-audit Renderer 34/34、a11y 10/10、Tauri adapter 7/7，Node validation/discovery 子进程 Secret 环境继承为 0。连续三个 resumed goal turn 仍存在相同的两个外部条件：
-
-当时 Windows UI smoke 尚未恢复、Cloudflare Apply 也尚未进入动态一次性确认流程，`releaseReady=false`。Windows 等待条件已于 2026-08-22 解除并完成安装、生命周期和进程隔离 smoke；Cloudflare 仍未 Apply，且不因 Windows 授权而获得 mutation 权限。
-
-## 2026-08-21 Windows Host 路径修复与 artifacts（历史，已被 2026-08-22 证据取代）
-
-真实普通安装排除了 Node、standalone bundle、配置、env allowlist 和基础 Supervisor 后，进一步复现发现：Tauri 2.11 的 Windows Resource 路径源于 canonicalized current executable，因此固定入口以 `\\?\` verbatim-disk 路径传给 Node。Node 24 将该 ESM entry 错误解析并快速退出；Tauri command 因而真实返回 `DESKTOP_HOST_UNAVAILABLE`。修复前的 extended-path Supervisor 为 `HostError::Crashed`，修复后同一真实 Node、bundle 和 config 完成 hello + snapshot（27/27）。
-
-```text
-npm run verify:desktop:source
-  resource/verifier tests      10/10 PASS
-  Renderer                     34/34 PASS
-  i18n                          3/3 PASS
-  a11y                         10/10 PASS
-  Rust                         45/45 PASS
-  Core                        157/157 PASS
-  MCP Tool Contract            27/27 PASS
-
-npm run verify:desktop:windows
-  status                       EXTERNAL_GATE_PENDING
-  validatedSubgate             WINDOWS_RELEASE_NATIVE_BUILD
-  MSI sha256                   fc08416f66b4de25ca9b53f27663a458e0643daf687fe913f388031a51daf8a1
-  NSIS sha256                  0caf117583fdcf2dcd7039b20a2e0277ec82a97446c010fdfb99e5c74a54a72b
-
-current release EXE / Tauri IPC
-  runtime.getSnapshot          resolved / ok
-  state                        stopped
-  totalTools                   27
-  managedByDesktop             true
-  owned Host children          1 while parent alive / 0 after exact parent stop
-  partial machine evidence     .toolspan-dev/evidence/windows-release-binary-20260821T055204Z.json
-
-npm run verify:release
-  deterministic gates          PASS
-  overall                      EXTERNAL_GATE_PENDING / exit 3
-  dry-run evidence             .toolspan-dev/evidence/release/run-20260821T054445055Z-b17f18c6
-  verification evidence        .toolspan-dev/evidence/release/release-verification-20260821T054449976Z.json
-  tag / publish                false / false
-```
-
-这些历史证据证明了当时源码、release EXE、fixed Host entry 和 owned-child cleanup，但旧 artifact hash 不得用于提升当前 gate。2026-08-22 已进一步完成当前安装器 UI、生命周期、unrelated-process isolation 与 Owner 手工系统托盘 smoke，因此最新 verifier 中 `E-WIN-01=PASS`。
-
-## 标准交接字段（2026-08-22）
-
-本次报告更新涉及的文件：
-
-- `LICENSE`
-- `package.json`
-- `package-lock.json`
-- `npm-shrinkwrap.json`
-- `README.md`
-- `README.zh-CN.md`
-- `.gitattributes`
-- `.github/workflows/core.yml`
-- `scripts/check-oss.mjs`
-- `scripts/check-ci.mjs`
-- `scripts/desktop-verification-utils.mjs`
-- `scripts/e2e-mcp-inspector.mjs`
-- `scripts/e2e-cloudflare.mjs`
-- `scripts/e2e-cloudflare-public.mjs`
-- `scripts/tests/cloudflare-e2e.test.mjs`
-- `scripts/tests/cloudflare-public-e2e.test.mjs`
-- `scripts/tests/host-e2e-safety.test.mjs`
-- `scripts/e2e-codex-remote.mjs`
-- `scripts/tests/codex-remote-e2e.test.mjs`
-- `scripts/tests/release-scripts.test.mjs`
-- `scripts/tests/setup-verification.test.mjs`
-- `src/state/state-store.ts`
-- `tests/artifacts.test.ts`
-- `tests/runner-registry.test.ts`
-- `vitest.config.ts`
-- `docs/release/host-e2e.md`
-- `.toolspan-dev/evidence/windows-tray-manual-20260822T130308Z.json`
-- `.toolspan-dev/evidence/external/E-WIN-01.json`
-- `.toolspan-dev/evidence/codex-remote-e2e-202608221403547af16438e2.json`
-- `.toolspan-dev/evidence/external/E-CODEX-01.json`
-- `.toolspan-dev/evidence/external/E-OWNER-01.json`
-- `.toolspan-dev/evidence/external/E-GH-01.json`
-- `.toolspan-dev/evidence/cloudflare-recovery-cleanup-20260822-d6d529bfa9.json`
-- `.toolspan-dev/evidence/cloudflare-e2e-20260822-cc6cd8b988.json`
-- `.toolspan-dev/evidence/cloudflare-public-e2e-20260822-cc6cd8b988.json`
-- `.toolspan-dev/evidence/external/E-CF-TOKEN-01.json`
-- `.toolspan-dev/goal-state.json`
-- `docs/release/release-gates.md`
-
-下一项明确外部操作：必需 Release 门禁与 scoped-token one-click Cloudflare claim 已无 pending。Windows one-click cloudflared service 仍需可丢弃的管理员 VM；Affiliate CTA 若继续显示，需提供 exact affiliate ID/coupon 的日期化账号证据，否则移除 referral CTA。正式 tag/Release 仍须 Maintainer 另行显式批准。
+Owner 于 2026-08-22 批准采用 Apache License 2.0（`LICENSE` 规范化 SHA-256 `58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd`，npm 元数据均为 SPDX ID `Apache-2.0`）；仓库 `zy789363/ToolSpan` 已转为 PUBLIC，默认分支 `main`、branch protection 启用 linear history 并禁止 force push/deletion、`Protect main` ruleset 为 `active`、private vulnerability reporting 返回 `enabled=true`。未创建 tag 或 Release（后续 tag/Release 见下文）。
 
 ## 2026-08-23 releaseReady 收敛记录
 
