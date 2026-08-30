@@ -54,7 +54,7 @@ async function main() {
   for (const relativePath of ["SECURITY.md", "CODE_OF_CONDUCT.md", "SUPPORT.md"]) {
     assert(contents.get(relativePath).includes("OWNER GATE"), `${relativePath} must expose missing owner contact/identity`);
   }
-  assert(contents.get("SECURITY.md").includes("Do not open a public issue"), "SECURITY.md must direct vulnerability reports away from public issues");
+  assert(contents.get("SECURITY.md").includes("不要创建公开 issue"), "SECURITY.md must direct vulnerability reports away from public issues");
 
   const joined = [...contents.values()].join("\n");
   assert(!/https?:\/\/(?:github\.com\/)?(?:example|your[-_ ]?(?:org|repo|name))/iu.test(joined), "OSS files contain a fabricated placeholder repository URL");
