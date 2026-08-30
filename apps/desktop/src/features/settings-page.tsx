@@ -11,6 +11,7 @@ import { PageHeader } from "../components/page-header";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
+import { getPasswordLength, MIN_OWNER_PASSWORD_LENGTH, PasswordStrength } from "../components/ui/password-strength";
 import { Seg } from "../components/ui/seg";
 import { OperationError, SectionTitle, useRuntimeSnapshot } from "./shared";
 
@@ -42,6 +43,7 @@ export function SettingsPage({ navigate }: { navigate(page: PageId): void }) {
   useEffect(() => () => setPassword(""), []);
   if (snapshot.data === undefined) return null;
   const data = snapshot.data;
+  const passwordLength = getPasswordLength(password);
 
   return (
     <div className="page-stack">
@@ -85,9 +87,10 @@ export function SettingsPage({ navigate }: { navigate(page: PageId): void }) {
           <Card className="settings-card">
             <div className="settings-icon"><KeyRound aria-hidden="true" size={18} /></div>
             <form className="password-form" onSubmit={(event) => { event.preventDefault(); setPasswordUpdated(false); passwordMutation.mutate(password); }}>
-              <label><span>{t("settings.ownerPassword")}</span><input autoComplete="new-password" minLength={12} onChange={(event) => setPassword(event.target.value)} placeholder={t("settings.passwordPlaceholder")} type="password" value={password} /></label>
+              <label><span>{t("settings.ownerPassword")}</span><input aria-describedby="settings-owner-password-requirements" aria-invalid={passwordLength > 0 && passwordLength < MIN_OWNER_PASSWORD_LENGTH} autoComplete="new-password" minLength={MIN_OWNER_PASSWORD_LENGTH} onChange={(event) => setPassword(event.target.value)} placeholder={t("settings.passwordPlaceholder")} type="password" value={password} /></label>
               <p>{t("settings.passwordHelp")}</p>
-              <div className="button-row"><Button disabled={password.length < 12 || passwordMutation.isPending} type="submit" variant="primary"><Save aria-hidden="true" size={15} />{t("settings.updatePassword")}</Button>{password === "" ? null : <Button onClick={() => setPassword("")}>{t("common.cancel")}</Button>}</div>
+              <div id="settings-owner-password-requirements"><PasswordStrength value={password} />{passwordLength > 0 && passwordLength < MIN_OWNER_PASSWORD_LENGTH ? <small className="password-form__error" role="alert">{t("onboarding.validationPassword")}</small> : null}</div>
+              <div className="button-row"><Button disabled={passwordLength < MIN_OWNER_PASSWORD_LENGTH || passwordMutation.isPending} type="submit" variant="primary"><Save aria-hidden="true" size={15} />{t("settings.updatePassword")}</Button>{password === "" ? null : <Button onClick={() => setPassword("")}>{t("common.cancel")}</Button>}</div>
               {passwordUpdated ? <p className="success-message" role="status">{t("settings.passwordUpdated")}</p> : null}
             </form>
           </Card>

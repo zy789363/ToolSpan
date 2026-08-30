@@ -24,8 +24,9 @@ async function main(): Promise<void> {
   const output = fileIndex < 0 ? undefined : arguments_[fileIndex + 1];
   if (output === undefined) throw new Error("Usage: password:init -- --file <path> [--force]");
   const password = await readPassword();
-  if (password.length < 12 || password.length > 128) {
-    throw new Error("Owner password must contain 12 to 128 characters");
+  const passwordCharacters = Array.from(password).length;
+  if (passwordCharacters < 8 || passwordCharacters > 128) {
+    throw new Error("Owner password must contain 8 to 128 characters");
   }
   const absolutePath = path.resolve(output);
   await mkdir(path.dirname(absolutePath), { recursive: true });

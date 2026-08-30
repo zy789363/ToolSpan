@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { LookupAddress } from "node:dns";
 import { lookup as lookupDns } from "node:dns/promises";
 import { once } from "node:events";
-import { readFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 import http, { type Server } from "node:http";
 import https from "node:https";
 import { isIP } from "node:net";
@@ -44,6 +44,7 @@ interface ProbeResponse {
 
 export interface DesktopProductionServiceOptions {
   configPath: string;
+  logPath?: string;
   now?: () => number;
   lookupAddresses?: (hostname: string) => Promise<readonly LookupAddress[]>;
   probeLocal?: (url: URL) => Promise<ProbeResponse>;
@@ -279,14 +280,28 @@ export function createDesktopProductionService(
   const probePublic = options.probePublic ?? defaultProbePublic;
   const listeners = new Set<(event: DesktopHostEvent) => void>();
   const safeLog: string[] = [];
+  const logPath = options.logPath;
+  let logWrite = Promise.resolve();
   let active: ActiveRuntime | undefined;
   let setupService = options.setupService;
   let state: RuntimeState = "stopped";
   let lastPublicReady: boolean | null = null;
 
   const appendLog = (message: string): void => {
-    safeLog.push(`${new Date(now()).toISOString()} ${message}\n`);
+    const line = `${new Date(now()).toISOString()} ${message}\n`;
+    safeLog.push(line);
     if (safeLog.length > 500) safeLog.shift();
+    if (logPath === undefined) return;
+    logWrite = logWrite
+      .then(async () => {
+        await mkdir(path.dirname(logPath), { recursive: true });
+        await appendFile(logPath, line, "utf8");
+      })
+      .catch(() => undefined);
+  };
+
+  const flushLogs = async (): Promise<void> => {
+    await logWrite;
   };
 
   const emit = (event: DesktopHostEvent): void => {
@@ -361,9 +376,12 @@ export function createDesktopProductionService(
     state = "starting";
     await emitSnapshot();
     let runtime: Runtime | undefined;
+    let phase: "config" | "runtime" | "listen" = "config";
     try {
       const config = await loadConfig(options.configPath);
+      phase = "runtime";
       runtime = await createRuntime(config);
+      phase = "listen";
       const server = runtime.app.listen(config.port, config.host);
       await once(server, "listening");
       active = { config, runtime, server };
@@ -375,7 +393,7 @@ export function createDesktopProductionService(
     } catch (error) {
       if (runtime !== undefined) await runtime.close();
       state = "attention";
-      appendLog("Runtime failed to start");
+      appendLog(`Runtime failed to start [${phase === "config" ? "CONFIG_INVALID" : "RUNTIME_START_FAILED"}]`);
       emit({ event: "runtime.attention", data: { code: "START_FAILED" } });
       throw error;
     }
@@ -540,17 +558,35 @@ export function createDesktopProductionService(
             ),
           };
         case "runtime.getLogChunk": {
-          const config = await loadCurrentConfig();
-          let fileLog = "";
-          for (const name of ["toolspan-service.log", "webgpt-service.log"]) {
+          await flushLogs();
+          const logFiles = new Set<string>();
+          const fileLogs: string[] = [];
+          let hasLogFile = false;
+          const readLogFile = async (filePath: string): Promise<void> => {
+            if (logFiles.has(filePath)) return;
+            logFiles.add(filePath);
             try {
-              fileLog = await readFile(path.join(config.stateDirectory, name), "utf8");
-              break;
+              fileLogs.push(await readFile(filePath, "utf8"));
+              hasLogFile = true;
             } catch (error) {
               if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
             }
+          };
+          if (logPath !== undefined) await readLogFile(logPath);
+          let config: ToolSpanConfig | undefined;
+          try {
+            config = await loadCurrentConfig();
+          } catch {
+            config = undefined;
           }
-          const content = Buffer.from(sanitizeLogs(`${fileLog}${safeLog.join("")}`), "utf8");
+          if (config !== undefined) {
+            for (const name of ["toolspan-service.log", "webgpt-service.log"]) {
+              await readLogFile(path.join(config.stateDirectory, name));
+              if (hasLogFile) break;
+            }
+          }
+          if (!hasLogFile) fileLogs.push(safeLog.join(""));
+          const content = Buffer.from(sanitizeLogs(fileLogs.join("")), "utf8");
           const cursor = Math.min(input.cursor as number | undefined ?? 0, content.length);
           const limit = input.limit as number | undefined ?? MAX_PROBE_BODY_BYTES;
           const chunk = content.subarray(cursor, cursor + limit);
@@ -582,6 +618,7 @@ export function createDesktopProductionService(
     },
     async close(): Promise<void> {
       await stop();
+      await flushLogs();
       listeners.clear();
     },
   };

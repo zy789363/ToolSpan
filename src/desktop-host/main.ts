@@ -5,6 +5,7 @@ import { createDesktopProductionService } from "./production-service.js";
 async function main(): Promise<void> {
   const service = createDesktopProductionService({
     configPath: resolveConfigPath({ argv: process.argv.slice(2) }),
+    logPath: process.env.TOOLSPAN_LOG_PATH,
   });
   try {
     await runDesktopHost({

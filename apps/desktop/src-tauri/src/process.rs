@@ -68,6 +68,7 @@ pub struct HostLaunch {
     configured_node: Option<PathBuf>,
     resource_path: PathBuf,
     config_path: PathBuf,
+    log_path: PathBuf,
 }
 
 impl HostLaunch {
@@ -75,6 +76,7 @@ impl HostLaunch {
         configured_node: Option<PathBuf>,
         resource_path: PathBuf,
         config_path: PathBuf,
+        log_path: PathBuf,
     ) -> Result<Self, HostError> {
         if !has_fixed_resource_suffix(&resource_path) {
             return Err(HostError::InvalidHostResource);
@@ -83,6 +85,7 @@ impl HostLaunch {
             configured_node,
             resource_path,
             config_path,
+            log_path,
         })
     }
 }
@@ -270,6 +273,7 @@ fn spawn_host(launch: &HostLaunch) -> Result<OwnedHost, HostError> {
         .env_clear()
         .envs(safe_child_environment())
         .env("TOOLSPAN_CONFIG", &launch.config_path)
+        .env("TOOLSPAN_LOG_PATH", &launch.log_path)
         .env("TOOLSPAN_DESKTOP_OWNERSHIP_NONCE", &nonce)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

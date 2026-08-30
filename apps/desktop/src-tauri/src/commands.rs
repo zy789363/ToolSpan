@@ -79,8 +79,14 @@ pub struct DesktopState {
 impl DesktopState {
     pub fn new(paths: DesktopPaths, host_resource: PathBuf) -> Result<Self, CommandError> {
         let configured_node = load_configured_node(&paths.node_settings_file);
-        let launch = HostLaunch::new(configured_node, host_resource, paths.config_file.clone())
-            .map_err(|_| CommandError::new("HOST_RESOURCE_INVALID"))?;
+        let log_path = paths.app_log_root.join("toolspan-service.log");
+        let launch = HostLaunch::new(
+            configured_node,
+            host_resource,
+            paths.config_file.clone(),
+            log_path,
+        )
+        .map_err(|_| CommandError::new("HOST_RESOURCE_INVALID"))?;
         let current = read_json_config(&paths.config_file)
             .map_err(|_| CommandError::new("CONFIG_READ_FAILED"))?;
         let roots = current
@@ -690,7 +696,10 @@ fn merge_runtime_snapshot_response(
         )
     });
     let unified = json!({
-        "firstRunRequired": false,
+        "firstRunRequired": host
+            .get("firstRunRequired")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         "instanceName": host.get("instanceName").and_then(Value::as_str).unwrap_or("ToolSpan"),
         "core": {
             "state": ui_state,
@@ -1297,5 +1306,35 @@ mod tests {
         assert_eq!(merged["result"]["connection"]["localReady"], true);
         assert_eq!(merged["result"]["toolContract"]["available"], 27);
         assert!(merged["result"]["state"].is_null());
+    }
+
+    #[test]
+    fn invalid_host_snapshot_preserves_first_run_repair_requirement() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let paths = DesktopPaths {
+            config_file: directory.path().join("toolspan.config.json"),
+            password_file: directory.path().join("owner.bcrypt"),
+            node_settings_file: directory.path().join("node.json"),
+            app_data_root: directory.path().join("data"),
+            app_log_root: directory.path().join("logs"),
+        };
+        let resource = directory.path().join("desktop-host").join("main.js");
+        let state = DesktopState::new(paths, resource).expect("desktop state");
+        let host = json!({
+            "id": "snapshot",
+            "ok": true,
+            "result": {
+                "state": "attention",
+                "firstRunRequired": true,
+                "productVersion": env!("CARGO_PKG_VERSION"),
+                "mcpTools": {"available": 0, "total": 27},
+                "recentJobs": [],
+                "recentArtifacts": []
+            }
+        });
+
+        let merged = merge_runtime_snapshot_response(host, &state).expect("merged response");
+        assert_eq!(merged["result"]["firstRunRequired"], true);
+        assert_eq!(merged["result"]["core"]["state"], "attention");
     }
 }

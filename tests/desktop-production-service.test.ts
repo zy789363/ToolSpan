@@ -1,5 +1,5 @@
 import { createServer } from "node:net";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -101,6 +101,41 @@ describe("Desktop production service", () => {
       expect(logs.chunk).toContain("ordinary diagnostic");
       expect(logs.chunk).not.toContain("must-not-leak");
       expect((await service.invoke("runtime.stop", {}) as { state: string }).state).toBe("stopped");
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("keeps a missing workspace repairable and exposes a persisted safe startup diagnostic", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "toolspan-desktop-invalid-config-"));
+    temporaryDirectories.push(directory);
+    await mkdir(path.join(directory, "state"));
+    await mkdir(path.join(directory, "secrets"));
+    await writeFile(path.join(directory, "secrets", "owner.bcrypt"), await hash("owner-password", 4));
+    const configPath = path.join(directory, "toolspan.config.json");
+    const missingRoot = path.join(directory, "missing-project");
+    await writeFile(configPath, JSON.stringify({
+      instanceName: "desktop-test",
+      host: "127.0.0.1",
+      port: 8787,
+      publicBaseUrl: "http://127.0.0.1:8787",
+      allowedRoots: [missingRoot],
+      stateDirectory: "./state",
+      ownerPasswordHashFile: "./secrets/owner.bcrypt",
+    }));
+    const logPath = path.join(directory, "logs", "toolspan-service.log");
+    const service = createDesktopProductionService({ configPath, logPath });
+
+    try {
+      await expect(service.invoke("runtime.start", {})).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(service.invoke("runtime.getSnapshot", {})).resolves.toMatchObject({
+        state: "attention",
+        firstRunRequired: true,
+      });
+      const logs = await service.invoke("runtime.getLogChunk", {}) as { chunk: string };
+      expect(logs.chunk).toContain("CONFIG_INVALID");
+      expect(logs.chunk).not.toContain(missingRoot);
+      expect(await readFile(logPath, "utf8")).toContain("CONFIG_INVALID");
     } finally {
       await service.close();
     }

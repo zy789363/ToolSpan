@@ -3,12 +3,12 @@ use thiserror::Error;
 use zeroize::{Zeroize, Zeroizing};
 
 const BCRYPT_MAX_PASSWORD_BYTES: usize = 72;
-const MIN_PASSWORD_CHARACTERS: usize = 12;
+const MIN_PASSWORD_CHARACTERS: usize = 8;
 const MAX_PASSWORD_CHARACTERS: usize = 128;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum PasswordError {
-    #[error("owner password must contain at least 12 characters")]
+    #[error("owner password must contain at least 8 characters")]
     TooShort,
     #[error("owner password must contain at most 128 characters")]
     TooManyCharacters,
@@ -80,12 +80,12 @@ mod tests {
     }
 
     #[test]
-    fn enforces_the_twelve_character_rust_boundary() {
+    fn enforces_the_eight_character_rust_boundary() {
         assert_eq!(
-            hash_owner_password_local("x".repeat(11)),
+            hash_owner_password_local("x".repeat(7)),
             Err(PasswordError::TooShort)
         );
-        assert!(hash_owner_password_local("x".repeat(12)).is_ok());
+        assert!(hash_owner_password_local("x".repeat(8)).is_ok());
     }
 
     #[test]
