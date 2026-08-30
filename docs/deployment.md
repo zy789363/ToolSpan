@@ -1,5 +1,7 @@
 # Windows 与 Cloudflare 部署手册
 
+本文面向在 Windows 上验证、安装和维护 ToolSpan 服务，并由所有者管理 Cloudflare 公网入口的人员。命令应从仓库根目录执行；涉及凭据、外部账号或公网资源的步骤仍由所有者手动完成。
+
 ## 责任边界
 
 本仓库的自动化可以校验配置、构建并测试服务、安装当前用户的计划任务、验证 Cloudflare 入口规则（Ingress），以及安装或更新 `cloudflared` Windows 服务。
@@ -8,8 +10,8 @@
 
 1. 拥有或控制公网主机名。
 2. 登录 Cloudflare 并授权 `cloudflared`。
-3. 创建 Tunnel 和 DNS 路由。
-4. 将生成的 Tunnel 凭据复制到服务账号可读的位置。
+3. 创建隧道（Tunnel）和 DNS 路由。
+4. 将生成的隧道（Tunnel）凭据复制到服务账号可读的位置。
 5. 选择所有者密码。
 6. 在 ChatGPT/Codex 中添加并授权 MCP 连接器。
 
@@ -66,13 +68,13 @@ cloudflared.exe tunnel create toolspan-mcp
 cloudflared.exe tunnel route dns toolspan-mcp mcp.example.com
 ```
 
-将 [Cloudflare 配置示例](../deploy/cloudflared/config.example.yml)复制到私有位置，并替换：
+将 [Cloudflare 配置示例](../deploy/cloudflared/config.example.yml) 复制到私有位置，并替换：
 
 - Tunnel UUID；
 - `credentials-file` 路径；
 - 将 `mcp.example.com` 替换为 `publicBaseUrl` 使用的同一主机名。
 
-如果要作为 Windows 系统服务运行，请把生成的 Tunnel 凭据 JSON 复制到 `LocalSystem` 可读的位置，例如：
+如果要作为 Windows 系统服务运行，请把生成的隧道（Tunnel）凭据 JSON 复制到 `LocalSystem` 可读的位置，例如：
 
 ```text
 C:\Windows\System32\config\systemprofile\.cloudflared\<tunnel-uuid>.json
@@ -104,7 +106,7 @@ Get-Service cloudflared
 Get-Content C:\Cloudflared\cloudflared.log -Tail 100
 ```
 
-Cloudflare 建议将 Tunnel 作为服务运行，并在[官方指南](https://developers.cloudflare.com/tunnel/advanced/local-management/as-a-service/windows/)中说明了 Windows 命令和配置文件布局。
+Cloudflare 建议将隧道（Tunnel）作为服务运行，并在[官方指南](https://developers.cloudflare.com/tunnel/advanced/local-management/as-a-service/windows/)中说明了 Windows 命令和配置文件布局。
 
 ## 5. 外部验证
 

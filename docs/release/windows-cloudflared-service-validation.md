@@ -1,7 +1,7 @@
-# E-CF-WIN-01 — Windows cloudflared service 生命周期验证（admin VM）
+# E-CF-WIN-01 — Windows cloudflared service 生命周期验证（管理员 VM）
 
-> **Gate：** `E-CF-WIN-01` — Windows cloudflared service install/start/reboot/uninstall validated。
-> **类型：** `native`。仅在宣传 "Windows one-click" 时作为 Release 条件激活。
+> **门禁：** `E-CF-WIN-01` — Windows cloudflared service 的安装、启动、重启、卸载（install/start/reboot/uninstall）均已验证。
+> **类型：** `native`。仅在宣传 "Windows one-click" 时作为发布（Release）条件激活。
 > **当前状态：** `BLOCKED_BY_ENVIRONMENT`。需要一台可丢弃的 Windows 11 x64 管理员 VM。
 > **证据格式：** 日期化、脱敏闭集 JSON（`schemaVersion` / `requirementId` / `status` / `observedAt` / `sanitized` / `secretValues` + `proof`），写入 `.toolspan-dev/evidence/external/E-CF-WIN-01.json` 后运行 `npm run verify:release` 复核。
 
@@ -9,7 +9,7 @@
 
 ## 1. 目的
 
-证明 ToolSpan 的 cloudflared service 管理在真实 Windows 上满足：
+证明 ToolSpan 的 cloudflared service 服务管理在真实 Windows 上满足：
 
 1. **安装**：`cloudflared service install` + ingress 配置 + Automatic 启动类型 + 启动；
 2. **持久性**：Windows 重启后 service 仍存在且为 Running + Automatic；
@@ -18,7 +18,7 @@
 5. **不按端口杀进程**：脚本不得出现 stop-process / taskkill / 按 PID 终止逻辑；
 6. **Secret 数量 0**：证据不包含任何 token/key/password。
 
-这些要求在源码侧已由以下脚本实现并被 `scripts/tests/cloudflared-service-lifecycle.test.mjs` 静态冻结：
+这些要求在源码侧已由以下脚本实现，并被 `scripts/tests/cloudflared-service-lifecycle.test.mjs` 静态冻结：
 
 ```text
 scripts/cloudflared-service-lifecycle.ps1     # 分阶段生命周期验证 + 证据输出
@@ -38,7 +38,7 @@ ToolSpan 项目 checkout（本仓库，当前版本 0.6.0）
 一份本地 cloudflared config（含真实 Tunnel ID 与 credentials-file 路径）
 ```
 
-cloudflared 获取方式建议与 `scripts/e2e-cloudflare-public.mjs` 一致：从 Cloudflare 官方 GitHub release 下载，校验 SHA-256，放在项目内 `.toolspan-dev/bin/`。
+cloudflared 获取方式建议与 `scripts/e2e-cloudflare-public.mjs` 一致：从 Cloudflare 官方 GitHub release 下载，校验 SHA-256 后，放在项目内 `.toolspan-dev/bin/`。
 
 ---
 
@@ -46,13 +46,13 @@ cloudflared 获取方式建议与 `scripts/e2e-cloudflare-public.mjs` 一致：�
 
 在管理员 PowerShell 中，进入项目根目录后按顺序执行。所有命令都在 **管理员** 会话中运行。
 
-### 3.1 Preflight
+### 3.1 预检（Preflight）
 
 ```powershell
 .\scripts\cloudflared-service-lifecycle.ps1 -Phase preflight
 ```
 
-预期输出 JSON envelope：
+预期输出 JSON 信封（envelope）：
 
 ```json
 {
@@ -75,7 +75,7 @@ cloudflared 获取方式建议与 `scripts/e2e-cloudflare-public.mjs` 一致：�
 - `service` 为 `null`（该 VM 上不得已有 cloudflared service）。
 - 若输出 `BLOCKED_BY_ENVIRONMENT`，按 `reasons` 补齐环境后再继续；不得跳过本阶段继续安装。
 
-### 3.2 Install
+### 3.2 安装（Install）
 
 ```powershell
 .\scripts\cloudflared-service-lifecycle.ps1 -Phase install -CloudflaredPath .\.toolspan-dev\bin\cloudflared.exe -ConfigPath .\deploy\cloudflared\config.example.yml
@@ -103,7 +103,7 @@ cloudflared 获取方式建议与 `scripts/e2e-cloudflare-public.mjs` 一致：�
 - ownership 文件已生成（这是后续卸载的证明依据）；
 - 若输出 `BLOCKED_BY_ENVIRONMENT` 且 `reasons=["EXTERNAL_SERVICE_PRESERVED"]`，说明 VM 上已有外部 cloudflared service，应换一台干净 VM。
 
-### 3.3 Reboot + 持久性验证
+### 3.3 重启（Reboot）+ 持久性验证
 
 保持 ownership 文件不动，**重启 VM**。重启后重新打开管理员 PowerShell，进入项目根目录：
 
@@ -129,15 +129,15 @@ cloudflared 获取方式建议与 `scripts/e2e-cloudflare-public.mjs` 一致：�
 - `serviceAfterReboot.exists: true` 且 `running: true`、`startup: "Automatic"` —— 证明重启后服务自愈；
 - `ownershipBound: true` —— 服务与本次 session 的 ownership 记录绑定。
 
-### 3.4 Verify（可选中间检查）
+### 3.4 验证（Verify，可选中间检查）
 
 ```powershell
 .\scripts\cloudflared-service-lifecycle.ps1 -Phase verify
 ```
 
-确认 service 处于 Running 且 ownership 绑定。
+确认 service 处于 Running 状态且 ownership 已绑定。
 
-### 3.5 Uninstall
+### 3.5 卸载（Uninstall）
 
 ```powershell
 .\scripts\cloudflared-service-lifecycle.ps1 -Phase uninstall -CloudflaredPath .\.toolspan-dev\bin\cloudflared.exe
@@ -165,7 +165,7 @@ cloudflared 获取方式建议与 `scripts/e2e-cloudflare-public.mjs` 一致：�
 
 ---
 
-## 4. 产出闭集证据并喂给 verify:release
+## 4. 产出闭集证据并交给 verify:release
 
 在项目根目录手工组装（或由执行脚本生成）`docs/release/windows-cloudflared-service-validation.md` 的配套证据：
 
@@ -203,7 +203,7 @@ cloudflared 获取方式建议与 `scripts/e2e-cloudflare-public.mjs` 一致：�
 npm run verify:release
 ```
 
-当 `verify:release` 输出 `releaseReady: true`（需同时满足其他必需 gate）时，`E-CF-WIN-01` 即视为 PASS。
+当 `verify:release` 输出 `releaseReady: true`（需同时满足其他必需门禁）时，`E-CF-WIN-01` 即视为 PASS。
 
 ---
 
@@ -229,17 +229,17 @@ npm run verify:release
 ## 6. 完成后
 
 - 将本文件的日期化执行记录与证据摘要附入 `docs/release/release-gates.md` 的 E-CF-WIN-01 行；
-- 若产品停用 "Windows one-click" claim，可把 `WINDOWS_ONE_CLICK_CLAIM` 置为 inactive，使该 gate 不再阻塞（由 `verify:release` 的 claim policy 机制处理）；
+- 若产品停用 "Windows one-click" claim，可把 `WINDOWS_ONE_CLICK_CLAIM` 置为 inactive，使该门禁不再阻塞（由 `verify:release` 的 claim policy 机制处理）；
 - 清理：卸载后确认 VM 上无残留 cloudflared service、无 ownership 文件、无 token。
 
 ---
 
 ## 7. 已知问题与规避（实测记录）
 
-**cloudflared 2026.8.2 以 agent 模式安装服务，`Restart-Service` / `Stop-Service` 可能永久卡在 `StopPending` 假死**（服务进程已退出但 SCM 状态不刷新）。实测于 2026-08-23 腾讯云 Windows Server VM。
+**cloudflared 2026.8.2 以 agent 模式安装服务，`Restart-Service` / `Stop-Service` 可能永久卡在 `StopPending` 假死状态**（服务进程已退出但 SCM 状态不刷新）。实测于 2026-08-23 腾讯云 Windows Server VM。
 
 - **症状**：install 阶段执行 `Restart-Service -Name cloudflared` 后无限输出 "正在等待服务停止…"，脚本挂起。
-- **根因**：新版 cloudflared agent service 对停止请求不响应，SCM 等待超时前一直保持 `StopPending`。
+- **根因**：新版 cloudflared agent service 对停止请求不响应，SCM 在等待超时前一直保持 `StopPending`。
 - **规避（已内置到脚本）**：
   - install/verify 阶段不再使用 `Restart-Service`，改用 `Start-CloudflaredService`（已 Running 则跳过；未运行则通过 30s 有界 Job 启动）；
   - uninstall 阶段使用 `Stop-CloudflaredServiceBounded`（45s 有界 Job），超时后记录 WARNING 并继续 `service uninstall`，脚本不会挂死；

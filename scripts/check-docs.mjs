@@ -43,28 +43,21 @@ async function main() {
     text(path.join("docs", "usage", "chatgpt-chat-vs-codex.md")),
   ]);
 
-  assert(english.startsWith("# ToolSpan\n"), "README.md must be the English ToolSpan README");
-  assert(chinese.startsWith("# ToolSpan\n"), "README.zh-CN.md must be a full ToolSpan README");
-  for (const heading of [
-    "## Local tools and remote tools",
-    "## Security warning",
-    "## Quick start: deterministic local smoke",
-    "## Remote connection overview",
-    "## Four common workflows",
-    "## Exact 27-tool contract",
-    "## ChatGPT Chat, MCP, and Codex usage",
-    "## Troubleshooting decision tree",
-  ]) assert(english.includes(heading), `README.md is missing ${heading}`);
+  assert(english.startsWith("# ToolSpan\n"), "README.md must be the primary Chinese ToolSpan README");
+  assert(chinese.startsWith("# ToolSpan\n"), "README.zh-CN.md must be a full Chinese ToolSpan README");
   for (const heading of [
     "## 本地工具与远程工具",
     "## 安全警告",
     "## 快速开始：确定性本地 Smoke",
     "## 远程连接概览",
     "## 四个常用工作流",
-    "## Exact 27 Tool Contract",
+    "## 精确的 27 个工具契约",
     "## ChatGPT Chat、MCP 与 Codex 用量",
-    "## Troubleshooting 决策树",
-  ]) assert(chinese.includes(heading), `README.zh-CN.md is missing ${heading}`);
+    "## 故障排查决策树",
+  ]) {
+    assert(english.includes(heading), `README.md is missing Chinese-first heading ${heading}`);
+    assert(chinese.includes(heading), `README.zh-CN.md is missing ${heading}`);
+  }
 
   for (const readme of [english, chinese]) {
     assert(readme.includes("Codex") && readme.includes("ToolSpan MCP"), "README must distinguish Codex-local and ToolSpan-remote actions");
@@ -74,7 +67,7 @@ async function main() {
     assert(readme.includes("shell: false"), "README must preserve the shell:false boundary");
     assert(readme.includes("headless") || readme.includes("无头"), "README must present headless Core as a complete path");
   }
-  requireInOrder(english, "## Security warning", "### 2. Modify and test", "README.md");
+  requireInOrder(english, "## 安全警告", "### 2. 修改并测试", "README.md");
   requireInOrder(chinese, "## 安全警告", "### 2. 修改并测试", "README.zh-CN.md");
 
   const expected = [...TOOLS].sort();

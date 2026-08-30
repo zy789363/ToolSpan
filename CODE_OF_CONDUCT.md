@@ -1,17 +1,17 @@
-# Code of conduct
+# 行为准则
 
-## Our standard
+## 我们的标准
 
-Project participation should be respectful, technically honest, and safe. Examples of welcome behavior include constructive review, clear disagreement focused on the work, crediting others, protecting private information, and accepting responsibility for mistakes.
+参与项目应保持尊重、技术诚实和安全。受欢迎的行为包括建设性评审、围绕工作本身进行清晰的不同意见交流、认可他人的贡献、保护私人信息，以及为错误承担责任。
 
-Unacceptable behavior includes harassment, discrimination, threats, sexualized attention, deliberate intimidation, doxxing, publishing another person's private data, credential sharing, or knowingly misleading claims about test, security, or release status.
+不可接受的行为包括骚扰、歧视、威胁、性化关注、故意恐吓、人肉搜索、公开他人的私人数据、分享凭证，或明知故犯地误导他人有关测试、安全或 Release 状态的判断。
 
-## Scope
+## 适用范围
 
-This standard applies in project spaces and when representing the project in public spaces. It also applies to private reports handled through project-maintained channels.
+本准则适用于项目空间，也适用于在公共空间代表项目时的行为；通过项目维护的渠道处理的私人报告同样适用。
 
-## Enforcement
+## 执行
 
-Report conduct concerns privately to the channel designated by the repository owner. The maintainer identity and private conduct contact are an **OWNER GATE** and are intentionally not fabricated here. Do not place personal or sensitive evidence in a public issue.
+请通过仓库 Owner 指定的渠道私下报告行为问题。Maintainer 身份和私人行为联系渠道属于 **OWNER GATE**，本文不会故意编造。不要在公开 issue 中放置个人或敏感证据。
 
-Once designated, maintainers may remove content, restrict participation, request a correction, or permanently exclude a participant, proportionate to impact and repeated behavior. They must avoid conflicts of interest, protect reporter privacy where possible, and document enforcement decisions privately.
+渠道确定后，Maintainer 可以根据影响和重复行为的程度，移除内容、限制参与、要求更正，或永久排除参与者。他们必须避免利益冲突，在可能的范围内保护报告者隐私，并私下记录执行决定。

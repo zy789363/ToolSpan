@@ -67,15 +67,15 @@ function secretValueMatches(content) {
 function validateManual(content) {
   const headings = [...content.matchAll(/^## (\d+)\. ([^\r\n]+)/gmu)];
   const expectedTitles = [
-    "Local health",
-    "Domain / Zone",
-    "Create or select Tunnel",
-    "Route hostname to local Core",
+    "本机健康检查",
+    "域名 / Zone",
+    "创建或选择 Tunnel",
+    "将 hostname 路由到本地 Core",
     "DNS",
-    "Install / run cloudflared",
-    "Public health",
-    "OAuth metadata",
-    "Host scan and exact 27 tools",
+    "安装 / 运行 cloudflared",
+    "公网健康检查",
+    "OAuth 元数据",
+    "Host 扫描与精确 27 个工具",
   ];
   if (headings.length !== expectedTitles.length) fail("cloudflare-manual.md must contain exactly nine numbered tutorial steps");
   for (const [index, match] of headings.entries()) {
@@ -88,8 +88,8 @@ function validateManual(content) {
     }
   }
   requireOrder(content, [
-    "Local health", "Domain / Zone", "Create or select Tunnel", "Route hostname to local Core", "DNS",
-    "Install / run cloudflared", "Public health", "OAuth metadata", "Host scan and exact 27 tools",
+    "本机健康检查", "域名 / Zone", "创建或选择 Tunnel", "将 hostname 路由到本地 Core", "DNS",
+    "安装 / 运行 cloudflared", "公网健康检查", "OAuth 元数据", "Host 扫描与精确 27 个工具",
   ], "docs/setup/cloudflare-manual.md");
   requirePatterns(content, [
     /\/healthz/u,
@@ -201,7 +201,7 @@ export async function run() {
     /`reused` 永不自动删除/u,
     /fingerprint/u,
     /ROLLBACK_PARTIAL/u,
-    /第二次 `duplicates = 0`/u,
+    /第二次[^\r\n]*`duplicates = 0`/u,
   ], "docs/setup/troubleshooting-and-rollback.md");
 
   await validateInternalLinks(entries);

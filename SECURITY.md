@@ -1,24 +1,24 @@
-# Security policy
+# 安全政策
 
-ToolSpan exposes scoped remote file, job, and artifact capabilities. Please treat a suspected authentication bypass, path escape, command execution, token disclosure, artifact disclosure, or Host/Origin bypass as security-sensitive.
+ToolSpan 提供带 Scope 的远程文件、作业和制品能力。疑似 authentication bypass、path escape、command execution、token disclosure、artifact disclosure 或 Host/Origin bypass 时，请按安全问题处理。
 
-## Supported versions
+## 支持的版本
 
-| Version | Status |
+| 版本 | 状态 |
 | --- | --- |
-| Unreleased 0.5.x development line | Receives security fixes |
-| Earlier imported development snapshots | Not supported |
+| Unreleased 0.5.x development line | 接收安全修复 |
+| Earlier imported development snapshots | 不支持 |
 
-There is no published stable release until the Owner publication gates are complete.
+在 Owner publication gates 完成之前，不会发布稳定版本。
 
-## Report a vulnerability privately
+## 私下报告漏洞
 
-Do not open a public issue and do not include passwords, tokens, configuration contents, private paths, or real user data in a report.
+不要创建公开 issue，也不要在报告中包含密码、Token、配置内容、私人路径或真实用户数据。
 
-Use the private vulnerability-reporting channel configured by the repository owner. The public repository location and security contact are currently an **OWNER GATE** and are intentionally not invented in this document. If no private channel is visible, retain the minimal reproduction locally and wait for the owner to publish one.
+请使用仓库 Owner 配置的私有 vulnerability-reporting channel。公共仓库位置和安全联系渠道当前属于 **OWNER GATE**，本文不会故意编造。如果看不到私有渠道，请在本地保留最小复现，并等待 Owner 发布渠道。
 
-A useful private report contains the affected version, security boundary, minimal reproduction using synthetic data, expected result, actual result, and any safe mitigation. Never test against systems or accounts you do not own or have explicit permission to assess.
+一份有用的私有报告应包含受影响版本、安全边界、使用 synthetic data 的最小复现、预期结果、实际结果和安全缓解措施。绝不要在不属于你或未获得明确评估许可的系统或账号上测试。
 
-## Disclosure and response
+## 披露与响应
 
-No response-time promise is made before a maintainer and private contact are published. Coordinated disclosure details will be agreed through the private channel. Release notes must describe the boundary affected without exposing credentials or exploit-ready private data.
+在发布 Maintainer 和私有联系渠道之前，不承诺响应时间。协调披露细节将通过私有渠道协商。Release notes 必须说明受影响的边界，但不得暴露凭证或可直接用于利用的私人数据。
