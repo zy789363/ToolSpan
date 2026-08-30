@@ -135,32 +135,34 @@ export function AppShell({
 
         <section className="workspace-frame">
           <header className="titlebar">
-            <div className="titlebar__context">
-              <span>{t(`nav.${activePage}`)}</span>
-            </div>
-            <div className="titlebar__actions">
-              <span className="language-indicator">
-                <Languages aria-hidden="true" size={14} />
-                {i18n.language === "zh-CN" ? "简体中文" : "English"}
-              </span>
-              <Tooltip.Root>
-                <Tooltip.Trigger asChild>
-                  <Button
-                    aria-label={t("app.refresh")}
-                    onClick={onRefresh}
-                    size="icon"
-                    variant="ghost"
-                  >
-                    <RefreshCw aria-hidden="true" className={refreshing ? "spin" : ""} size={16} />
-                  </Button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content className="tooltip" sideOffset={6}>
-                    {t("app.refresh")}
-                    <Tooltip.Arrow className="tooltip-arrow" />
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
+            <div className="titlebar__inner">
+              <div className="titlebar__context">
+                <span>{t(`nav.${activePage}`)}</span>
+              </div>
+              <div className="titlebar__actions">
+                <span className="language-indicator">
+                  <Languages aria-hidden="true" size={14} />
+                  {i18n.language === "zh-CN" ? "简体中文" : "English"}
+                </span>
+                <Tooltip.Root>
+                  <Tooltip.Trigger asChild>
+                    <Button
+                      aria-label={t("app.refresh")}
+                      onClick={onRefresh}
+                      size="icon"
+                      variant="ghost"
+                    >
+                      <RefreshCw aria-hidden="true" className={refreshing ? "spin" : ""} size={16} />
+                    </Button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Portal>
+                    <Tooltip.Content className="tooltip" sideOffset={6}>
+                      {t("app.refresh")}
+                      <Tooltip.Arrow className="tooltip-arrow" />
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+              </div>
             </div>
           </header>
           <main className="main-content" id="main-content" tabIndex={-1}>{children}</main>

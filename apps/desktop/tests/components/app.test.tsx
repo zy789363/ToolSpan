@@ -51,11 +51,11 @@ describe("ToolSpan desktop renderer", () => {
     const navigation = screen.getByRole("navigation", { name: "ToolSpan" });
     const destinations = within(navigation).getAllByRole("button");
     expect(destinations.map((button) => button.textContent)).toEqual([
-      "Overview", "Setup", "Connection", "Workspaces", "Jobs", "Artifacts", "Logs", "Settings",
+      "Overview", "Public setup", "Connection", "Workspaces", "Jobs", "Artifacts", "Logs", "Settings",
     ]);
-    for (const page of ["Setup", "Connection", "Workspaces", "Jobs", "Artifacts", "Logs", "Settings"]) {
+    for (const page of ["Public setup", "Connection", "Workspaces", "Jobs", "Artifacts", "Logs", "Settings"]) {
       await user.click(within(navigation).getByRole("button", { name: page }));
-      expect(await screen.findByRole("heading", { level: 1, name: page === "Setup" ? "Setup Center" : page })).toBeTruthy();
+      expect(await screen.findByRole("heading", { level: 1, name: page === "Public setup" ? "Setup Center" : page })).toBeTruthy();
     }
   });
 
@@ -93,6 +93,27 @@ describe("ToolSpan desktop renderer", () => {
     await user.click(screen.getByRole("button", { name: "Overview" }));
     expect(screen.queryByLabelText("New owner password")).toBeNull();
     expect(JSON.stringify({ ...globalThis.localStorage })).not.toContain(plaintext);
+  });
+
+  it("shows owner password requirements and accepts the eight-character minimum in settings", async () => {
+    const user = userEvent.setup();
+    const base = createDemoDesktopAdapter();
+    const hashOwnerPassword = vi.fn(async () => "$2b$fixture-hash");
+    const updateOwnerPasswordHash = vi.fn(async () => undefined);
+    const adapter: DesktopAdapter = { ...base, hashOwnerPassword, updateOwnerPasswordHash };
+    await renderApp({ adapter, page: "settings" });
+
+    const password = await screen.findByLabelText("New owner password") as HTMLInputElement;
+    const submit = screen.getByRole("button", { name: "Update password" });
+    expect(password.minLength).toBe(8);
+    expect(screen.getByText(/Use at least 8 characters/iu)).toBeTruthy();
+    expect(screen.getByRole("status", { name: "Password strength: Enter a password" })).toBeTruthy();
+    expect(submit.hasAttribute("disabled")).toBe(true);
+
+    await user.type(password, "aB3!xyz?");
+
+    expect(submit.hasAttribute("disabled")).toBe(false);
+    expect(screen.getByRole("status", { name: "Password strength: Medium" })).toBeTruthy();
   });
 
   it("offers only Cancel or Stop Core and quit for a managed Core", async () => {
@@ -237,9 +258,18 @@ describe("ToolSpan desktop renderer", () => {
     expect(screen.getByText(firstRunSnapshot.logPath)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Continue" }));
 
+    const password = screen.getByLabelText("Owner password") as HTMLInputElement;
+    expect(password.minLength).toBe(8);
+    expect(screen.getByText(/Use at least 8 characters/iu)).toBeTruthy();
+    expect(screen.getByRole("status", { name: "Password strength: Enter a password" })).toBeTruthy();
+    await user.type(password, "1234567");
+    expect(screen.getByRole("alert").textContent).toBe("Use at least 8 characters.");
+    await user.clear(password);
+
     const plaintext = "first-run-password";
-    await user.type(screen.getByLabelText("Owner password"), plaintext);
+    await user.type(password, plaintext);
     await user.type(screen.getByLabelText("Confirm password"), plaintext);
+    expect(screen.getByRole("status", { name: "Password strength: Strong" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByRole("heading", { name: "Validate and start" });
     expect(screen.queryByLabelText("Owner password")).toBeNull();

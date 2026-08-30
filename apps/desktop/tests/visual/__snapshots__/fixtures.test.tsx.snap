@@ -8,7 +8,7 @@ exports[`synthetic visual fixtures > 'connection' 'dark' 1`] = `
   "metricCount": 0,
   "navigation": [
     "Overview",
-    "Setup",
+    "Public setup",
     "Connection",
     "Workspaces",
     "Jobs",
@@ -28,7 +28,7 @@ exports[`synthetic visual fixtures > 'connection' 'light' 1`] = `
   "metricCount": 0,
   "navigation": [
     "Overview",
-    "Setup",
+    "Public setup",
     "Connection",
     "Workspaces",
     "Jobs",
@@ -48,7 +48,7 @@ exports[`synthetic visual fixtures > 'overview' 'dark' 1`] = `
   "metricCount": 4,
   "navigation": [
     "Overview",
-    "Setup",
+    "Public setup",
     "Connection",
     "Workspaces",
     "Jobs",
@@ -68,7 +68,7 @@ exports[`synthetic visual fixtures > 'overview' 'light' 1`] = `
   "metricCount": 4,
   "navigation": [
     "Overview",
-    "Setup",
+    "Public setup",
     "Connection",
     "Workspaces",
     "Jobs",
@@ -88,7 +88,7 @@ exports[`synthetic visual fixtures > 'settings' 'dark' 1`] = `
   "metricCount": 0,
   "navigation": [
     "Overview",
-    "Setup",
+    "Public setup",
     "Connection",
     "Workspaces",
     "Jobs",
@@ -108,7 +108,7 @@ exports[`synthetic visual fixtures > 'settings' 'light' 1`] = `
   "metricCount": 0,
   "navigation": [
     "Overview",
-    "Setup",
+    "Public setup",
     "Connection",
     "Workspaces",
     "Jobs",
@@ -122,13 +122,13 @@ exports[`synthetic visual fixtures > 'settings' 'light' 1`] = `
 
 exports[`synthetic visual fixtures > 'setup' 'dark' 1`] = `
 {
-  "cardCount": 6,
+  "cardCount": 8,
   "fixture": "setup",
   "heading": "Setup Center",
   "metricCount": 0,
   "navigation": [
     "Overview",
-    "Setup",
+    "Public setup",
     "Connection",
     "Workspaces",
     "Jobs",
@@ -142,13 +142,13 @@ exports[`synthetic visual fixtures > 'setup' 'dark' 1`] = `
 
 exports[`synthetic visual fixtures > 'setup' 'light' 1`] = `
 {
-  "cardCount": 6,
+  "cardCount": 8,
   "fixture": "setup",
   "heading": "Setup Center",
   "metricCount": 0,
   "navigation": [
     "Overview",
-    "Setup",
+    "Public setup",
     "Connection",
     "Workspaces",
     "Jobs",

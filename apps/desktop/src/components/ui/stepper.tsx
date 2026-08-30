@@ -5,13 +5,14 @@ export interface StepperProps {
   steps: string[];
   /** 0-based 当前步骤 */
   current: number;
+  ariaLabel?: string;
   className?: string;
 }
 
 /** 横向步骤条（v2：线性不可跳转） */
-export function Stepper({ steps, current, className = "" }: StepperProps) {
+export function Stepper({ steps, current, ariaLabel = "流程步骤", className = "" }: StepperProps) {
   return (
-    <ol className={`stepper ${className}`.trim()} aria-label="流程步骤">
+    <ol className={`stepper ${className}`.trim()} aria-label={ariaLabel}>
       {steps.map((step, i) => {
         const done = i < current;
         const active = i === current;

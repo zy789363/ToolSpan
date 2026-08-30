@@ -34,6 +34,8 @@ describe("Setup Center", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Setup Center" })).toBeTruthy();
     expect(await screen.findByText("IDLE")).toBeTruthy();
     expect(await screen.findByLabelText("Cloudflare zone domain")).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Public endpoint" })).toBeTruthy();
+    expect(screen.getByLabelText("Public endpoint preview").textContent).toContain("—");
     expect(screen.queryByText("Loading current state…")).toBeNull();
   });
 
@@ -74,6 +76,9 @@ describe("Setup Center", () => {
   it("records manual ChatGPT completion as USER_CONFIRMED rather than VALIDATED", async () => {
     const user = userEvent.setup();
     await renderApp({ page: "setup" });
+    await screen.findByRole("heading", { level: 1, name: "Setup Center" });
+    await screen.findByRole("heading", { name: "Public endpoint" });
+    await user.click(screen.getByText("Host connection guide"));
     await user.click(await screen.findByRole("button", { name: "I completed the manual host steps" }));
     expect(screen.getByText("User confirmed")).toBeTruthy();
     expect(screen.getByText(/VALIDATED requires real Host evidence/iu)).toBeTruthy();
@@ -97,7 +102,7 @@ describe("Setup Center", () => {
     await user.click(screen.getByRole("button", { name: "Overview" }));
     expect(screen.queryByLabelText("Scoped API token")).toBeNull();
     expect(JSON.stringify({ ...globalThis.localStorage })).not.toContain(secret);
-    await user.click(screen.getByRole("button", { name: "Setup" }));
+    await user.click(screen.getByRole("button", { name: "Public setup" }));
     token = await screen.findByLabelText("Scoped API token") as HTMLInputElement;
     expect(token.value).toBe("");
 

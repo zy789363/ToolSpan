@@ -32,6 +32,9 @@ import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { ConfirmDialog } from "../components/ui/confirm-dialog";
 import { CopyButton } from "../components/ui/copy-button";
+import { Notice } from "../components/ui/notice";
+import { StatusBanner } from "../components/ui/status-banner";
+import { Stepper } from "../components/ui/stepper";
 import { OperationError, SectionTitle, useRuntimeSnapshot } from "./shared";
 import {
   chatGptSetupContent,
@@ -147,11 +150,13 @@ type DomainChoice = SetupSafeManifest["domainChoice"];
 function DomainChooser({
   choice,
   commercial,
+  disabled,
   onChange,
   snapshot,
 }: {
   choice: DomainChoice;
   commercial: CommercialSetupContent;
+  disabled: boolean;
   onChange(choice: DomainChoice): void;
   snapshot: SetupSnapshot;
 }) {
@@ -161,13 +166,21 @@ function DomainChooser({
       <SectionTitle>{t("setup.domainTitle")}</SectionTitle>
       <p className="section-description">{t("setup.domainDescription")}</p>
       <div className="domain-choice-grid" role="group" aria-label={t("setup.domainTitle")}>
-        <button aria-pressed={choice === "existing"} className="domain-choice" onClick={() => onChange("existing")} type="button">
+        <button aria-pressed={choice === "existing"} className="domain-choice" disabled={disabled} onClick={() => onChange("existing")} type="button">
           {t("setup.alreadyDomain")}
         </button>
-        <button aria-pressed={choice === "other_registrar"} className="domain-choice" onClick={() => onChange("other_registrar")} type="button">
+        <button aria-pressed={choice === "other_registrar"} className="domain-choice" disabled={disabled} onClick={() => onChange("other_registrar")} type="button">
           {t("setup.anyRegistrar")}
         </button>
-        <a aria-current={choice === "namesilo_no_referral" ? "true" : undefined} className="domain-choice" href={commercial.directUrl} onClick={() => onChange("namesilo_no_referral")} rel="noreferrer" target="_blank">
+        <a
+          aria-current={choice === "namesilo_no_referral" ? "true" : undefined}
+          aria-disabled={disabled || undefined}
+          className="domain-choice"
+          href={disabled ? undefined : commercial.directUrl}
+          onClick={(event) => { if (disabled) event.preventDefault(); else onChange("namesilo_no_referral"); }}
+          rel="noreferrer"
+          target="_blank"
+        >
           {t("setup.namesiloNoReferral")}<ExternalLink aria-hidden="true" size={13} />
         </a>
       </div>
@@ -175,6 +188,55 @@ function DomainChooser({
         <p>{t("setup.noReferralRule")}</p>
         <p>{snapshot.vendorAssets === "verified" ? t("setup.verifiedVendor") : t("setup.textOnlyVendor")}</p>
         <p><strong>{t("setup.registrarBoundary")}</strong></p>
+      </div>
+    </Card>
+  );
+}
+
+function PublicEndpointFields({
+  domain,
+  hostname,
+  manifest,
+  disabled,
+  onDomain,
+  onHostname,
+}: {
+  domain: string;
+  hostname: string;
+  manifest: SetupSafeManifest;
+  disabled: boolean;
+  onDomain(value: string): void;
+  onHostname(value: string): void;
+}) {
+  const { t } = useTranslation();
+  const endpointRows = [
+    { label: t("setup.publicMcpUrl"), value: manifest.publicMcpUrl },
+    { label: t("setup.oauthUrl"), value: manifest.oauthDiscoveryUrl },
+  ];
+  return (
+    <Card className="setup-public-card">
+      <SectionTitle meta={<Badge tone="info">{t("setup.requiredInputs")}</Badge>}>{t("setup.publicEndpointTitle")}</SectionTitle>
+      <p className="section-description">{t("setup.publicEndpointDescription")}</p>
+      <div className="two-column setup-target-fields">
+        <label className="field setup-field">
+          <span>{t("setup.domainLabel")}</span>
+          <input autoComplete="off" disabled={disabled} onChange={(event) => onDomain(event.target.value)} placeholder={t("setup.domainPlaceholder")} spellCheck={false} value={domain} />
+        </label>
+        <label className="field setup-field">
+          <span>{t("setup.hostnameLabel")}</span>
+          <input autoComplete="off" disabled={disabled} onChange={(event) => onHostname(event.target.value)} placeholder={t("setup.hostnamePlaceholder")} spellCheck={false} value={hostname} />
+        </label>
+      </div>
+      <div className="setup-endpoint-preview" aria-label={t("setup.endpointPreview")}>
+        {endpointRows.map((row) => (
+          <div className="copy-field" key={row.label}>
+            <span>
+              <strong>{row.label}</strong>
+              <code>{row.value === "" ? "—" : row.value}</code>
+            </span>
+            {row.value === "" ? null : <CopyButton compact label={`${t("common.copy")} ${row.label}`} value={row.value} />}
+          </div>
+        ))}
       </div>
     </Card>
   );
@@ -296,14 +358,16 @@ function ManualTutorial() {
             <li key={key}>
               <span className="manual-step-number" aria-hidden="true">{index + 1}</span>
               <div>
-                <h3>{step}</h3>
-                <dl>
-                  <div><dt>{t("setup.purpose")}</dt><dd>{t("setup.manualPurpose", { step })}</dd></div>
-                  <div><dt>{t("setup.action")}</dt><dd>{step}</dd></div>
-                  <div><dt>{t("setup.expected")}</dt><dd>{t("setup.manualExpected")}</dd></div>
-                  <div><dt>{t("setup.failure")}</dt><dd>{t("setup.manualFailure")}</dd></div>
-                  <div><dt>{t("setup.recovery")}</dt><dd>{t("setup.manualRecovery")}</dd></div>
-                </dl>
+                <details className="manual-step" open={index === 0}>
+                  <summary>{step}</summary>
+                  <dl>
+                    <div><dt>{t("setup.purpose")}</dt><dd>{t("setup.manualPurpose", { step })}</dd></div>
+                    <div><dt>{t("setup.action")}</dt><dd>{step}</dd></div>
+                    <div><dt>{t("setup.expected")}</dt><dd>{t("setup.manualExpected")}</dd></div>
+                    <div><dt>{t("setup.failure")}</dt><dd>{t("setup.manualFailure")}</dd></div>
+                    <div><dt>{t("setup.recovery")}</dt><dd>{t("setup.manualRecovery")}</dd></div>
+                  </dl>
+                </details>
               </div>
             </li>
           );
@@ -362,7 +426,10 @@ function ChatGptGuide({ manifest, initialStatus, guide }: { manifest: SetupSafeM
       ) : null}
       <div className="setup-copy-grid">
         {fields.map((field) => (
-          <div className="copy-field" key={field.label}><span><strong>{field.label}</strong><code>{field.value}</code></span><CopyButton compact label={`${t("common.copy")} ${field.label}`} value={field.value} /></div>
+          <div className="copy-field" key={field.label}>
+            <span><strong>{field.label}</strong><code>{field.value === "" ? "—" : field.value}</code></span>
+            {field.value === "" ? null : <CopyButton compact label={`${t("common.copy")} ${field.label}`} value={field.value} />}
+          </div>
         ))}
       </div>
       <div className="button-row setup-chatgpt-actions">
@@ -372,6 +439,32 @@ function ChatGptGuide({ manifest, initialStatus, guide }: { manifest: SetupSafeM
         {status !== "VALIDATED" && status !== "BLOCKED_BY_HOST_PLAN_OR_POLICY" ? <Button onClick={() => setStatus("BLOCKED_BY_HOST_PLAN_OR_POLICY")}>{t("setup.markBlocked")}</Button> : null}
       </div>
       <p className="setup-truthful-status">{t("setup.confirmNotValidation")}</p>
+    </Card>
+  );
+}
+
+function setupStepFor(path: SetupPath, phase: SetupPhase): number {
+  if (path !== "scoped_api_token") return 0;
+  if (phase === "COMPLETE") return 4;
+  if (phase === "ROLLED_BACK") return 0;
+  if (phase === "PREFLIGHT" || phase === "NEEDS_CREDENTIAL_REENTRY" || phase === "NEEDS_RECONCILIATION" || phase === "ROLLBACK_PARTIAL") return 2;
+  if (phase === "PLANNED" || phase === "WAITING_FOR_CONFIRMATION" || phase === "APPLYING" || phase === "VERIFYING" || phase === "ROLLING_BACK") return 3;
+  return 1;
+}
+
+function SetupProgress({ path, phase }: { path: SetupPath; phase: SetupPhase }) {
+  const { t } = useTranslation();
+  return (
+    <Card className="setup-progress-card">
+      <div className="setup-progress-caption">
+        <strong>{t("setup.progressTitle")}</strong>
+        <span>{t("setup.progressDescription")}</span>
+      </div>
+      <Stepper
+        ariaLabel={t("setup.progress")}
+        current={setupStepFor(path, phase)}
+        steps={[t("setup.stepPath"), t("setup.stepPublic"), t("setup.stepChecks"), t("setup.stepApply")]}
+      />
     </Card>
   );
 }
@@ -598,6 +691,19 @@ export function SetupPage() {
   const recoveryNeeded = snapshot.requiresCredential || ["NEEDS_CREDENTIAL_REENTRY", "NEEDS_RECONCILIATION", "ROLLBACK_PARTIAL"].includes(snapshot.phase);
   const credentialRecoveryNeeded = snapshot.requiresCredential || ["NEEDS_CREDENTIAL_REENTRY", "NEEDS_RECONCILIATION"].includes(snapshot.phase);
   const terminalSession = ["COMPLETE", "ROLLED_BACK", "ROLLBACK_PARTIAL"].includes(snapshot.phase);
+  const setupStatus = recoveryNeeded
+    ? { status: "warn" as const, title: t("setup.statusRecoveryTitle"), description: t("setup.statusRecoveryDescription") }
+    : snapshot.phase === "COMPLETE"
+      ? { status: "ok" as const, title: t("setup.statusCompleteTitle"), description: t("setup.statusCompleteDescription") }
+      : snapshot.phase === "ROLLED_BACK"
+        ? { status: "idle" as const, title: t("setup.statusRolledBackTitle"), description: t("setup.statusRolledBackDescription") }
+      : ["APPLYING", "VERIFYING", "ROLLING_BACK"].includes(snapshot.phase)
+        ? { status: "running" as const, title: t("setup.statusWorkingTitle"), description: t("setup.statusWorkingDescription") }
+        : snapshot.phase === "PREFLIGHT"
+          ? { status: "idle" as const, title: t("setup.statusPreflightTitle"), description: t("setup.statusPreflightDescription") }
+          : waitingForApply || snapshot.phase === "PLANNED"
+            ? { status: "idle" as const, title: t("setup.statusWaitingTitle"), description: t("setup.statusWaitingDescription") }
+            : { status: "idle" as const, title: t("setup.statusIdleTitle"), description: t("setup.statusIdleDescription") };
 
   const startNewSession = () => {
     void adapter.discardSetupCredential(sessionIdRef.current);
@@ -631,59 +737,14 @@ export function SetupPage() {
         title={t("setup.title")}
       />
       {snapshot.lastErrorCode === null ? null : <p className="setup-blocker-code" role="status">{t("setup.blockerCode", { code: snapshot.lastErrorCode })}</p>}
+      <SetupProgress path={path} phase={snapshot.phase} />
+      <StatusBanner className="setup-status-banner" description={setupStatus.description} status={setupStatus.status} title={setupStatus.title} />
       <SetupPathChooser active={path} onChange={changePath} />
 
       {path === "guided_manual" ? <ManualTutorial /> : null}
 
       {path === "scoped_api_token" ? (
         <>
-          <DomainChooser choice={domainChoice} commercial={commercial} onChange={setDomainChoice} snapshot={snapshot} />
-          {!recoveryNeeded && credentialEntryNeeded ? <Card>
-            <SectionTitle meta={<Cloud aria-hidden="true" size={18} />}>{t("setup.credentialsTitle")}</SectionTitle>
-            <div className="two-column setup-target-fields">
-              <label className="field setup-field"><span>{t("setup.domainLabel")}</span><input autoComplete="off" disabled={busy || waitingForApply} onChange={(event) => setDomain(event.target.value)} placeholder={t("setup.domainPlaceholder")} spellCheck={false} value={domain} /></label>
-              <label className="field setup-field"><span>{t("setup.hostnameLabel")}</span><input autoComplete="off" disabled={busy || waitingForApply} onChange={(event) => setHostname(event.target.value)} placeholder={t("setup.hostnamePlaceholder")} spellCheck={false} value={hostname} /></label>
-            </div>
-            <CredentialFields
-              disabled={busy}
-              onToken={setToken}
-              token={token}
-            />
-            {error === null ? null : <p className="inline-error" role="alert">{error}</p>}
-            {credentialPreparedForApply ? <p className="setup-credential-ready" role="status">{t("setup.applyCredentialReady")}</p> : null}
-            <div className="button-row setup-submit-row">
-              <Button
-                disabled={busy}
-                onClick={() => { if (waitingForApply) void prepareApplyCredential(); else void runWithCredential("preflight"); }}
-                variant="primary"
-              >
-                <ShieldCheck aria-hidden="true" size={15} />{waitingForApply ? t("setup.prepareApplyCredential") : t("setup.verifyPreflight")}
-              </Button>
-              <Button disabled={busy} onClick={cancelSession}>{t("setup.cancelSession")}</Button>
-            </div>
-          </Card> : null}
-          <div className="two-column setup-gates-grid">
-            <ZoneGate snapshot={snapshot} />
-            <DryRun snapshot={snapshot} />
-          </div>
-          <Card className="setup-apply-card">
-            <div>
-              <strong>{t("setup.cloudflaredBoundary")}</strong>
-              <p>{t("setup.rotateGuidance")}</p>
-            </div>
-            <div className="button-row">
-              <Button disabled={!canGeneratePlan || busy} onClick={() => { void generatePlan(); }}><Route aria-hidden="true" size={15} />{t("setup.generatePlan")}</Button>
-              <ConfirmDialog
-                confirmLabel={t("setup.apply")}
-                description={t("setup.applyDescription")}
-                onCancel={cancelSession}
-                onConfirm={() => { void applyPlan(); }}
-                title={t("setup.applyTitle")}
-                trigger={<Button disabled={!canApply || busy} variant="primary"><CheckCircle2 aria-hidden="true" size={15} />{t("setup.apply")}</Button>}
-              />
-            </div>
-          </Card>
-          <VerificationReceipt snapshot={snapshot} />
           {recoveryNeeded ? (
             <Card className="setup-recovery-card" tone="accent">
               <SectionTitle meta={<LifeBuoy aria-hidden="true" size={18} />}>{t("setup.recoveryTitle")}</SectionTitle>
@@ -691,11 +752,8 @@ export function SetupPage() {
                 <>
                   <h3>{t("setup.reentryTitle")}</h3>
                   <p>{t("setup.reentryDescription")}</p>
-                  <CredentialFields
-                    disabled={busy}
-                    onToken={setToken}
-                    token={token}
-                  />
+                  <CredentialFields disabled={busy} onToken={setToken} token={token} />
+                  {error === null ? null : <p className="inline-error" role="alert">{error}</p>}
                   <div className="button-row">
                     <Button disabled={busy} onClick={() => { void runWithCredential("reconcile"); }}><RefreshCw aria-hidden="true" size={15} />{t("setup.reconcile")}</Button>
                     <ConfirmDialog
@@ -718,7 +776,61 @@ export function SetupPage() {
                 </div>
               )}
             </Card>
-          ) : null}
+          ) : (
+            <>
+              <DomainChooser choice={domainChoice} commercial={commercial} disabled={snapshot.phase !== "IDLE"} onChange={setDomainChoice} snapshot={snapshot} />
+              <PublicEndpointFields
+                disabled={busy || snapshot.phase !== "IDLE"}
+                domain={domain}
+                hostname={hostname}
+                manifest={manifest}
+                onDomain={setDomain}
+                onHostname={setHostname}
+              />
+              {credentialEntryNeeded ? <Card className="setup-credential-card">
+                <SectionTitle meta={<Cloud aria-hidden="true" size={18} />}>{t("setup.credentialsTitle")}</SectionTitle>
+                <p className="section-description">{t("setup.credentialsDescription")}</p>
+                <CredentialFields disabled={busy} onToken={setToken} token={token} />
+                {error === null ? null : <p className="inline-error" role="alert">{error}</p>}
+                {credentialPreparedForApply ? <p className="setup-credential-ready" role="status">{t("setup.applyCredentialReady")}</p> : null}
+                <div className="button-row setup-submit-row">
+                  <Button
+                    disabled={busy}
+                    onClick={() => { if (waitingForApply) void prepareApplyCredential(); else void runWithCredential("preflight"); }}
+                    variant="primary"
+                  >
+                    <ShieldCheck aria-hidden="true" size={15} />{waitingForApply ? t("setup.prepareApplyCredential") : t("setup.verifyPreflight")}
+                  </Button>
+                  <Button disabled={busy} onClick={cancelSession}>{t("setup.cancelSession")}</Button>
+                </div>
+                <Notice className="setup-boundary-note" icon={<LockKeyhole aria-hidden="true" size={15} />}>
+                  {t("setup.cloudflaredBoundary")} {t("setup.rotateGuidance")}
+                </Notice>
+              </Card> : null}
+              <div className="two-column setup-gates-grid">
+                <ZoneGate snapshot={snapshot} />
+                <DryRun snapshot={snapshot} />
+              </div>
+              <Card className="setup-apply-card">
+                <div>
+                  <strong>{t("setup.applySectionTitle")}</strong>
+                  <p>{t("setup.applySectionDescription")}</p>
+                </div>
+                <div className="button-row">
+                  <Button disabled={!canGeneratePlan || busy} onClick={() => { void generatePlan(); }}><Route aria-hidden="true" size={15} />{t("setup.generatePlan")}</Button>
+                  <ConfirmDialog
+                    confirmLabel={t("setup.apply")}
+                    description={t("setup.applyDescription")}
+                    onCancel={cancelSession}
+                    onConfirm={() => { void applyPlan(); }}
+                    title={t("setup.applyTitle")}
+                    trigger={<Button disabled={!canApply || busy} variant="primary"><CheckCircle2 aria-hidden="true" size={15} />{t("setup.apply")}</Button>}
+                  />
+                </div>
+              </Card>
+              <VerificationReceipt snapshot={snapshot} />
+            </>
+          )}
         </>
       ) : null}
 
@@ -729,7 +841,18 @@ export function SetupPage() {
         </>
       ) : null}
 
-      <ChatGptGuide guide={guide} initialStatus={snapshot.chatGptStatus} manifest={manifest} />
+      {!recoveryNeeded ? (
+        <details className="setup-guide-details">
+          <summary>
+            <span>
+              <strong>{t("setup.hostGuideSummary")}</strong>
+              <small>{t("setup.hostGuideSummaryDescription")}</small>
+            </span>
+            <Badge tone={chatGptTone(snapshot.chatGptStatus)}>{t("setup.hostGuideOptional")}</Badge>
+          </summary>
+          <ChatGptGuide guide={guide} initialStatus={snapshot.chatGptStatus} manifest={manifest} />
+        </details>
+      ) : null}
     </div>
   );
 }
