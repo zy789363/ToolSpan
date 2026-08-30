@@ -247,6 +247,8 @@ export interface DesktopAdapter {
   discardSetupCredential(sessionId: string): Promise<void>;
   onTrayAction(handler: (action: TrayAction) => void): Promise<() => void>;
   onQuitRequested(handler: (managedCore: boolean) => void): Promise<() => void>;
+  /** Tells the shell the quit dialog is reachable, disarming its quit deadline. */
+  acknowledgeQuitRequest(): Promise<void>;
   confirmQuit(stopManaged: boolean): Promise<void>;
 }
 

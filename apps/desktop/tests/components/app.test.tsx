@@ -123,6 +123,56 @@ describe("ToolSpan desktop renderer", () => {
     expect(confirmQuit).toHaveBeenCalledWith(true);
   });
 
+  it("acknowledges a quit request so the shell quit deadline stays disarmed", async () => {
+    const base = createDemoDesktopAdapter();
+    let quitHandler: ((managedCore: boolean) => void) | undefined;
+    const acknowledgeQuitRequest = vi.fn(async () => undefined);
+    const adapter: DesktopAdapter = {
+      ...base,
+      async onQuitRequested(handler) {
+        quitHandler = handler;
+        return () => undefined;
+      },
+      acknowledgeQuitRequest,
+    };
+    await renderApp({ adapter });
+    await screen.findByRole("heading", { name: "Demo workstation" });
+
+    act(() => quitHandler?.(true));
+    expect(acknowledgeQuitRequest).toHaveBeenCalledTimes(1);
+
+    // A stale or repeated request re-acknowledges: the dialog stays owned
+    // by the renderer while it is reachable.
+    act(() => quitHandler?.(false));
+    expect(acknowledgeQuitRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the quit confirmation reachable while the runtime snapshot is unavailable", async () => {
+    const user = userEvent.setup();
+    const base = createDemoDesktopAdapter();
+    let quitHandler: ((managedCore: boolean) => void) | undefined;
+    const getSnapshot = vi.fn(async () => { throw new Error("desktop host is unavailable"); });
+    const confirmQuit = vi.fn(async () => undefined);
+    const adapter: DesktopAdapter = {
+      ...base,
+      getSnapshot,
+      async onQuitRequested(handler) {
+        quitHandler = handler;
+        return () => undefined;
+      },
+      confirmQuit,
+    };
+    await renderApp({ adapter });
+    await screen.findByRole("heading", { name: "Desktop state is unavailable" });
+
+    act(() => quitHandler?.(true));
+    expect(await screen.findByRole("alertdialog")).toBeTruthy();
+
+    await user.click(await screen.findByRole("button", { name: "Stop Core and quit" }));
+    expect(confirmQuit).toHaveBeenCalledTimes(1);
+    expect(confirmQuit).toHaveBeenCalledWith(true);
+  });
+
   it("copies the configured MCP URL when the native tray requests it", async () => {
     const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
     const base = createDemoDesktopAdapter();

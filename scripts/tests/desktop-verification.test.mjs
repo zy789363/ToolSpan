@@ -177,7 +177,10 @@ test("Desktop resource smoke kills a chattering host at its fixed deadline and b
     "setInterval(chatter, 1);",
   ].join("\n"), "utf8");
 
-  const deadlineMs = 200;
+  // Allow the Windows Node child to start and deliver its first output event
+  // before the deliberately short timeout; the timeout remains bounded well
+  // below the production 10-second resource deadline.
+  const deadlineMs = 1_000;
   const outputLimitBytes = 4 * 1024;
   const startedAt = Date.now();
   let timeoutError;

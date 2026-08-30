@@ -318,6 +318,9 @@ export function createDemoDesktopAdapter(options: DemoAdapterOptions = {}): Desk
     async onQuitRequested() {
       return () => undefined;
     },
+    async acknowledgeQuitRequest() {
+      await delay();
+    },
     async confirmQuit() {
       await delay();
     },

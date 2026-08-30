@@ -1,4 +1,6 @@
 use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 
 use serde_json::json;
 use tauri::image::Image;
@@ -14,6 +16,14 @@ use crate::protocol::DesktopRequest;
 const TRAY_RUNNING_PNG: &[u8] = include_bytes!("../icons/tray-running.png");
 const TRAY_STOPPED_PNG: &[u8] = include_bytes!("../icons/tray-stopped.png");
 const TRAY_ATTENTION_PNG: &[u8] = include_bytes!("../icons/tray-attention.png");
+
+/// Upper bound for the renderer to acknowledge a tray quit request before
+/// the shell falls back to the bounded safe-stop sequence on its own. The
+/// quit flow must never depend on a responsive renderer: when the WebView
+/// is still loading, the event listener is not registered yet, or the
+/// renderer is unresponsive, the emitted event can be lost and nothing
+/// would ever call `confirm_quit` again.
+const QUIT_CONFIRMATION_DEADLINE: Duration = Duration::from_secs(10);
 
 fn status_text(key: &str) -> &'static str {
     match key {
@@ -37,6 +47,7 @@ pub fn run() {
             crate::commands::complete_first_run,
             crate::commands::update_owner_password_hash,
             crate::commands::choose_node_executable,
+            crate::commands::acknowledge_quit_request,
             crate::commands::confirm_quit,
             crate::setup::setup_set_credential
         ])
@@ -211,10 +222,28 @@ fn request_safe_quit(app: &tauri::AppHandle) {
         .is_some_and(|supervisor| supervisor.ownership_nonce().is_some());
     if managed {
         show_main_window(app);
+        let generation = app.state::<DesktopState>().quit_gate.begin_request();
         let _ = app.emit("tray://quit-requested", json!({"managedCore": true}));
+        spawn_quit_confirmation_deadline(app.clone(), generation);
     } else {
         app.exit(0);
     }
+}
+
+/// Runs the same confirmed-quit stop sequence the renderer would trigger
+/// via `confirm_quit`, but only when the renderer never acknowledged the
+/// quit request within `QUIT_CONFIRMATION_DEADLINE`. The stop sequence
+/// itself is bounded (host exchange timeout + nonce-checked termination),
+/// so a quit request converges to an exit instead of hanging forever.
+fn spawn_quit_confirmation_deadline(app: tauri::AppHandle, generation: u64) {
+    std::mem::drop(tauri::async_runtime::spawn_blocking(move || {
+        thread::sleep(QUIT_CONFIRMATION_DEADLINE);
+        let state = app.state::<DesktopState>();
+        if !state.quit_gate.is_unacknowledged(generation) {
+            return;
+        }
+        let _ = crate::commands::confirm_quit_internal(&app, &state, true);
+    }));
 }
 
 struct TrayStatus {
@@ -303,6 +332,43 @@ mod tests {
         assert!(!body.contains(".dialog()"));
         assert!(!body.contains("MessageDialogButtons"));
         assert!(body.contains("app.exit(0)"));
+    }
+
+    #[test]
+    fn quit_request_arms_a_bounded_renderer_deadline() {
+        let source = include_str!("app.rs");
+        let start = source
+            .find("fn request_safe_quit")
+            .expect("safe quit function");
+        let body = &source[start..];
+        let emit = body
+            .find("tray://quit-requested")
+            .expect("quit request emit");
+        let deadline = body
+            .find("spawn_quit_confirmation_deadline(app.clone(), generation)")
+            .expect("quit confirmation deadline");
+        let arm = body
+            .find("quit_gate.begin_request()")
+            .expect("quit gate re-arm");
+        // Arm before emitting so an immediate renderer acknowledgement cannot
+        // race with the fallback and re-arm the deadline after acknowledgement.
+        assert!(arm < emit);
+        assert!(arm < deadline);
+
+        // The fallback must be bounded, so an unreachable renderer can
+        // never extend the wait beyond the deadline plus the bounded
+        // stop sequence.
+        assert!(QUIT_CONFIRMATION_DEADLINE <= Duration::from_secs(15));
+        let fallback = body
+            .split_once("fn spawn_quit_confirmation_deadline")
+            .expect("quit deadline fallback")
+            .1
+            .split_once("\n}\n\nstruct TrayStatus")
+            .expect("fallback boundary")
+            .0;
+        assert!(fallback.contains("thread::sleep(QUIT_CONFIRMATION_DEADLINE)"));
+        assert!(fallback.contains("is_unacknowledged(generation)"));
+        assert!(fallback.contains("confirm_quit_internal(&app, &state, true)"));
     }
 
     #[test]

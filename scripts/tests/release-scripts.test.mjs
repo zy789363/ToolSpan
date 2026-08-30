@@ -59,6 +59,8 @@ function releaseGate(id) {
   return RELEASE_GATE_MATRIX.find((entry) => entry.id === id);
 }
 
+const TEST_NOW = new Date("2026-08-21T12:00:00Z");
+
 function manualPass(requirementId, proof, observedAt = "2026-08-21T00:00:00Z") {
   return {
     schemaVersion: "1.0",
@@ -695,14 +697,17 @@ test("E-CODEX-01 PASS proves remote read, write and job while the local fixture 
   assert.equal(validateManualGateEvidence(
     manualPass("E-CODEX-01", proof),
     releaseGate("E-CODEX-01"),
+    { now: TEST_NOW },
   ), true);
   assert.equal(validateManualGateEvidence(
     manualPass("E-CODEX-01", { ...proof, remoteAfterSha256: proof.remoteBeforeSha256 }),
     releaseGate("E-CODEX-01"),
+    { now: TEST_NOW },
   ), false);
   assert.equal(validateManualGateEvidence(
     manualPass("E-CODEX-01", { ...proof, localAfterSha256: "d".repeat(64) }),
     releaseGate("E-CODEX-01"),
+    { now: TEST_NOW },
   ), false);
 });
 
@@ -721,10 +726,12 @@ test("E-HOST-01 PASS proves the complete official Inspector protocol sequence", 
   assert.equal(validateManualGateEvidence(
     manualPass("E-HOST-01", proof),
     releaseGate("E-HOST-01"),
+    { now: TEST_NOW },
   ), true);
   assert.equal(validateManualGateEvidence(
     manualPass("E-HOST-01", { ...proof, insufficientScopePassed: false }),
     releaseGate("E-HOST-01"),
+    { now: TEST_NOW },
   ), false);
 });
 
@@ -739,7 +746,7 @@ test("E-WIN-01 PASS is bound to both current dry-run installers and all native s
     ownedProcessSmokePassed: true,
     unrelatedProcessSurvived: true,
   };
-  const options = { currentReleaseContext: CURRENT_RELEASE_CONTEXT };
+  const options = { currentReleaseContext: CURRENT_RELEASE_CONTEXT, now: TEST_NOW };
   assert.equal(validateManualGateEvidence(
     manualPass("E-WIN-01", proof),
     releaseGate("E-WIN-01"),
@@ -758,6 +765,7 @@ test("E-WIN-01 PASS is bound to both current dry-run installers and all native s
   assert.equal(validateManualGateEvidence(
     manualPass("E-WIN-01", proof),
     releaseGate("E-WIN-01"),
+    { now: TEST_NOW },
   ), false);
 });
 
@@ -780,14 +788,16 @@ test("Cloudflare API PASS proves the aiqushi.top lifecycle, idempotency, public 
     ["E-CF-TOKEN-01", "SCOPED_API_TOKEN"],
   ]) {
     const proof = { ...common, credentialType };
-    assert.equal(validateManualGateEvidence(manualPass(id, proof), releaseGate(id)), true, id);
+    assert.equal(validateManualGateEvidence(manualPass(id, proof), releaseGate(id), { now: TEST_NOW }), true, id);
     assert.equal(validateManualGateEvidence(
       manualPass(id, { ...proof, secondRunDuplicateCreates: 1 }),
       releaseGate(id),
+      { now: TEST_NOW },
     ), false, `${id}: duplicate create`);
     assert.equal(validateManualGateEvidence(
       manualPass(id, { ...proof, zoneName: "example.com" }),
       releaseGate(id),
+      { now: TEST_NOW },
     ), false, `${id}: wrong zone`);
   }
 });
@@ -875,11 +885,11 @@ test("every remaining PASS gate requires its own closed proof", () => {
     }, { currentReleaseContext: CURRENT_RELEASE_CONTEXT }],
   ];
   for (const [id, proof, options = {}] of cases) {
-    assert.equal(validateManualGateEvidence(manualPass(id, proof), releaseGate(id), options), true, id);
+    assert.equal(validateManualGateEvidence(manualPass(id, proof), releaseGate(id), { ...options, now: TEST_NOW }), true, id);
     assert.equal(validateManualGateEvidence(
       manualPass(id, { ...proof, unexpected: true }),
       releaseGate(id),
-      options,
+      { ...options, now: TEST_NOW },
     ), false, `${id}: proof must be closed`);
   }
 });

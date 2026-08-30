@@ -445,6 +445,7 @@ export function createTauriDesktopAdapter(): DesktopAdapter {
     async completeFirstRun(input: FirstRunInput) { await rustCall<void>("complete_first_run", { input }); },
     async updateOwnerPasswordHash(hash) { await rustCall<void>("update_owner_password_hash", { hash }); },
     async chooseNodeExecutable() { await rustCall<void>("choose_node_executable"); },
+    async acknowledgeQuitRequest() { await rustCall<void>("acknowledge_quit_request"); },
     async getSetupSnapshot(sessionId) {
       const value = await protocolCall("setup.getSnapshot", sessionId === undefined ? {} : { sessionId });
       return value === null ? null : mapSetupSnapshot(value);

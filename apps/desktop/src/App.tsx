@@ -95,7 +95,12 @@ function DesktopApplication({ initialPage = "overview" }: Pick<ToolSpanAppProps,
     let disposed = false;
     let unlisten: () => void = () => undefined;
     void adapter.onQuitRequested((managedCore) => {
-      if (managedCore) setQuitRequested(true);
+      if (managedCore) {
+        // The dialog is reachable from here: disarm the shell-side quit
+        // deadline so it does not force-quit while the owner is deciding.
+        void adapter.acknowledgeQuitRequest().catch(() => undefined);
+        setQuitRequested(true);
+      }
     }).then((removeListener) => {
       if (disposed) removeListener();
       else unlisten = removeListener;
@@ -106,24 +111,52 @@ function DesktopApplication({ initialPage = "overview" }: Pick<ToolSpanAppProps,
     };
   }, [adapter]);
 
-  if (snapshot.isPending) return <LoadingState />;
+  // The quit confirmation must stay reachable in every app state
+  // (loading, adapter error, first run, main UI): a quit request that
+  // arrives while the runtime snapshot is unavailable still needs a
+  // surface for the owner to answer.
+  const quitDialog = (
+    <QuitConfirmation
+      open={quitRequested}
+      onCancel={() => setQuitRequested(false)}
+      onConfirm={() => {
+        setQuitRequested(false);
+        void adapter.confirmQuit(true);
+      }}
+    />
+  );
+
+  if (snapshot.isPending) {
+    return (
+      <>
+        <LoadingState />
+        {quitDialog}
+      </>
+    );
+  }
   if (snapshot.isError || snapshot.data === undefined) {
     return (
-      <AdapterErrorState
-        onChooseNode={recoverWithNodePicker}
-        onRetry={() => { void snapshot.refetch(); }}
-      />
+      <>
+        <AdapterErrorState
+          onChooseNode={recoverWithNodePicker}
+          onRetry={() => { void snapshot.refetch(); }}
+        />
+        {quitDialog}
+      </>
     );
   }
   if (snapshot.data.firstRunRequired && !setupFinished) {
     return (
-      <FirstRun
-        snapshot={snapshot.data}
-        onFinished={() => {
-          setSetupFinished(true);
-          void snapshot.refetch();
-        }}
-      />
+      <>
+        <FirstRun
+          snapshot={snapshot.data}
+          onFinished={() => {
+            setSetupFinished(true);
+            void snapshot.refetch();
+          }}
+        />
+        {quitDialog}
+      </>
     );
   }
 
@@ -139,14 +172,7 @@ function DesktopApplication({ initialPage = "overview" }: Pick<ToolSpanAppProps,
     >
       <CurrentPage navigate={setPage} page={page} />
     </AppShell>
-    <QuitConfirmation
-      open={quitRequested}
-      onCancel={() => setQuitRequested(false)}
-      onConfirm={() => {
-        setQuitRequested(false);
-        void adapter.confirmQuit(true);
-      }}
-    />
+    {quitDialog}
     </>
   );
 }

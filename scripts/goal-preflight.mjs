@@ -9,7 +9,7 @@ import { findVisualStudio } from "./desktop-verification-utils.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const isWindows = process.platform === "win32";
-const SECRET_ENVIRONMENT_VARIABLE_NAMES = ["CloudFlareAPIKEY"];
+const SECRET_ENVIRONMENT_VARIABLE_NAMES = ["TOOLSPAN_E2E_CF_API_TOKEN"];
 
 async function exists(filePath) {
   try {

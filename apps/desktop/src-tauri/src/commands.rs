@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -34,9 +35,41 @@ pub struct DesktopPaths {
     pub app_log_root: PathBuf,
 }
 
+/// Tracks whether the renderer acknowledged the most recent tray quit
+/// request. A quit request must never hang forever when the renderer is
+/// unreachable (WebView still loading, event lost, or renderer dead), so
+/// `request_safe_quit` arms a bounded fallback that runs the same
+/// confirm-quit stop sequence when no acknowledgement arrives in time.
+#[derive(Debug, Default)]
+pub(crate) struct QuitGate {
+    generation: AtomicU64,
+    acknowledged: AtomicBool,
+}
+
+impl QuitGate {
+    /// Begins a new quit request and returns its generation.
+    pub(crate) fn begin_request(&self) -> u64 {
+        let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
+        self.acknowledged.store(false, Ordering::SeqCst);
+        generation
+    }
+
+    /// The renderer received the quit request (dialog is reachable).
+    pub(crate) fn acknowledge(&self) {
+        self.acknowledged.store(true, Ordering::SeqCst);
+    }
+
+    /// True only for the current, still-unacknowledged quit request.
+    pub(crate) fn is_unacknowledged(&self, generation: u64) -> bool {
+        self.generation.load(Ordering::SeqCst) == generation
+            && !self.acknowledged.load(Ordering::SeqCst)
+    }
+}
+
 #[derive(Debug)]
 pub struct DesktopState {
     pub supervisor: Arc<Mutex<HostSupervisor>>,
+    pub(crate) quit_gate: QuitGate,
     pub(crate) setup_credentials: SetupCredentialVault,
     paths: DesktopPaths,
     config_hash: Mutex<Option<String>>,
@@ -56,6 +89,7 @@ impl DesktopState {
             .unwrap_or_default();
         Ok(Self {
             supervisor: Arc::new(Mutex::new(HostSupervisor::new(launch))),
+            quit_gate: QuitGate::default(),
             setup_credentials: SetupCredentialVault::default(),
             paths,
             config_hash: Mutex::new(current.map(|snapshot| snapshot.hash)),
@@ -396,6 +430,11 @@ pub async fn choose_node_executable(
 }
 
 #[tauri::command]
+pub fn acknowledge_quit_request(state: State<'_, DesktopState>) {
+    state.quit_gate.acknowledge();
+}
+
+#[tauri::command]
 pub fn confirm_quit(
     app: AppHandle,
     state: State<'_, DesktopState>,
@@ -432,6 +471,8 @@ pub(crate) fn confirm_quit_internal(
     state: &DesktopState,
     stop_managed: bool,
 ) -> Result<(), CommandError> {
+    // The renderer answered the quit request: disarm the bounded fallback.
+    state.quit_gate.acknowledge();
     let mut supervisor = state
         .supervisor
         .lock()
@@ -450,17 +491,18 @@ pub(crate) fn confirm_quit_internal(
                 method: "runtime.stop".into(),
                 params: json!({}),
             };
-            let reply = supervisor
-                .invoke(&stop)
-                .map_err(|_| CommandError::new("RUNTIME_STOP_FAILED"))?;
-            validate_runtime_stop_reply(&reply)?;
-            let nonce = supervisor
-                .ownership_nonce()
-                .map(str::to_owned)
-                .ok_or_else(|| CommandError::new("DESKTOP_HOST_UNAVAILABLE"))?;
-            supervisor
-                .stop_owned(&nonce)
-                .map_err(|_| CommandError::new("DESKTOP_HOST_UNAVAILABLE"))?;
+            // The owner already confirmed quitting, so a failed or rejected
+            // graceful stop must never strand a quit-confirmed process.
+            // Validate the reply first, then terminate the owned host and
+            // exit even when the graceful stop did not succeed.
+            if let Ok(reply) = supervisor.invoke(&stop) {
+                let _ = validate_runtime_stop_reply(&reply);
+            }
+            if let Some(nonce) = supervisor.ownership_nonce().map(str::to_owned) {
+                supervisor
+                    .stop_owned(&nonce)
+                    .map_err(|_| CommandError::new("DESKTOP_HOST_UNAVAILABLE"))?;
+            }
             drop(supervisor);
             app.exit(0);
             Ok(())
@@ -1061,7 +1103,7 @@ mod tests {
             .expect("stop-and-quit branch")
             .1;
         let validate = branch
-            .find("validate_runtime_stop_reply(&reply)?")
+            .find("validate_runtime_stop_reply(&reply)")
             .expect("reply validation");
         let terminate = branch
             .find(".stop_owned(&nonce)")
@@ -1070,6 +1112,62 @@ mod tests {
 
         assert!(validate < terminate);
         assert!(terminate < exit);
+    }
+
+    #[test]
+    fn confirmed_quit_never_strands_the_process_when_the_graceful_stop_fails() {
+        let source = include_str!("commands.rs");
+        let function = source
+            .split_once("pub(crate) fn confirm_quit_internal")
+            .expect("quit function")
+            .1
+            .split_once("fn write_first_run_files")
+            .expect("quit function boundary")
+            .0;
+        let branch = function
+            .split_once("QuitDecision::StopOwnedAndExit =>")
+            .expect("stop-and-quit branch")
+            .1;
+
+        // The graceful runtime.stop exchange is best-effort: a failed or
+        // rejected reply (timeout, crashed host) must still terminate the
+        // owned host and exit instead of returning an error.
+        assert!(branch.contains("if let Ok(reply) = supervisor.invoke(&stop)"));
+        let invoke = branch
+            .find("supervisor.invoke(&stop)")
+            .expect("graceful stop invoke");
+        let terminate = branch
+            .find(".stop_owned(&nonce)")
+            .expect("exact owned termination");
+        let exit = branch.find("app.exit(0)").expect("application exit");
+        assert!(invoke < terminate);
+        assert!(terminate < exit);
+        // Ownership stays optional: the host may already be gone after a
+        // failed exchange, and no owned process means a safe direct exit.
+        assert!(branch.contains("if let Some(nonce) = supervisor.ownership_nonce()"));
+    }
+
+    #[test]
+    fn quit_gate_tracks_only_the_latest_unacknowledged_request() {
+        let gate = QuitGate::default();
+        let first = gate.begin_request();
+        assert!(gate.is_unacknowledged(first));
+
+        let second = gate.begin_request();
+        assert!(!gate.is_unacknowledged(first), "stale request is inert");
+        assert!(gate.is_unacknowledged(second));
+
+        gate.acknowledge();
+        assert!(
+            !gate.is_unacknowledged(second),
+            "acknowledged request is inert"
+        );
+
+        let third = gate.begin_request();
+        assert!(
+            gate.is_unacknowledged(third),
+            "a new request re-arms the gate"
+        );
     }
 
     #[test]
