@@ -187,7 +187,7 @@ Owner 于 2026-08-22 批准采用 Apache License 2.0（`LICENSE` 规范化 SHA-2
 
 背景：托盘此前从未进入设计系统（参考原型已删且回收站无记录），按 v2 设计语言补写规范并落地实现，随后升版 0.7.1 发布。
 
-1. **设计规范**：托盘设计事实源计划落档为 `docs/desktop-design-v2.md` 第 7 章「系统托盘」，但该文件当前未随仓库提交（缺失）；设计 token（`--tray-active #3b82f6`/`--tray-idle #9ca3af`/`--tray-attention #f59e0b`）、图标规格（16/24/32px ICO + 32px PNG、状态=整体色）、菜单结构（4 分组 + 启用/禁用态）、交互（左键显示窗口/Quit 确认）等要点暂记录于本行。
+1. **设计规范**：托盘设计事实源落档为 `docs/desktop-design-v2.md` 第 7 章「系统托盘」（唯一设计事实源）：token（`--tray-active #3b82f6`/`--tray-idle #9ca3af`/`--tray-attention #f59e0b`）、图标规格（16/24/32px ICO + 32px PNG、状态=整体色）、菜单结构（4 分组 + 启用/禁用态）、交互（左键显示窗口/Quit 确认）、无障碍、实现对照矩阵。该文件原计划随 v0.7.1 提交但当时缺失，2026-08-31 已按源码补建。
 2. **实现（commit `3dc375c`）**：`app.rs` `build_tray`/`TrayStatus`/`update_tray_status` 重写——三态图标 `set_icon`（running/stopped/attention）、`MenuItem::set_enabled` 状态绑定（Start↔Stop 互斥、Copy 仅 running）、`on_tray_icon_event` 左键 → `show_main_window`；`commands.rs` 调用点传状态键；tauri 启用 `image-png` feature；`smoke-core-release.mjs` 错误诊断附 stderr。
 3. **验证**：cargo fmt/check/clippy（无 warning）/test 49/49；`check:desktop:security` 11 项；**verify:desktop:source 16/16 PASS**；**verify:release PASS / releaseReady=true**（dry-run 82 files、SBOM 770）。
 4. **E-WIN-01（0.7.1：MSI `ba81d937…`、NSIS `e3e1c928…`）**：卸载 0.7.0 → 装 0.7.1 → 启动/WebView2 0.7.1/Desktop Host → Owner 确认托盘（状态图标/菜单禁用态/左键）→ 退出路径与 v0.7.0 零 diff（v0.7.0 干净退出已验证）。**已知观察**：Core stopped 状态下托盘 Quit 的 runtime.stop 握手可能挂起（Core/desktop-host 层，非托盘回归），Owner 决策按现状发布并已记入 release notes。证据 `windows-native-smoke-20260824T114433Z.json`。
