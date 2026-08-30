@@ -1,43 +1,43 @@
-name: Feature request
-description: Propose a scoped ToolSpan improvement
+name: 功能请求
+description: 提出范围明确的 ToolSpan 改进
 title: "[Feature]: "
 body:
   - type: textarea
     id: problem
     attributes:
-      label: Problem
-      description: Describe the user problem without prescribing a large solution.
+      label: 问题
+      description: 描述用户问题，不预先规定大型解决方案。
     validations:
       required: true
   - type: textarea
     id: outcome
     attributes:
-      label: Smallest useful outcome
+      label: 最小可用结果
     validations:
       required: true
   - type: dropdown
     id: boundary
     attributes:
-      label: Product boundary
+      label: 产品边界
       options:
-        - Fits the existing Core server contract
-        - Documentation or operator experience
-        - Unsure and needs boundary review
+        - 符合现有 Core server 契约
+        - 文档或操作者体验
+        - 不确定，需要边界评审
     validations:
       required: true
   - type: checkboxes
     id: non_goals
     attributes:
-      label: Scope confirmation
+      label: 范围确认
       options:
-        - label: This does not require an arbitrary Shell, MCP Client, Gateway, Agent Runtime, chat feature, or public admin route.
+        - label: 这不需要任意 Shell、MCP Client、Gateway、Agent Runtime、聊天功能或公网管理路由。
           required: true
-        - label: I have not included secrets, private paths, account IDs, or user data.
+        - label: 我没有包含 Secret、私人路径、账号 ID 或用户数据。
           required: true
   - type: textarea
     id: verification
     attributes:
-      label: Verifiable acceptance result
-      description: State how a deterministic test could prove the outcome.
+      label: 可验证的验收结果
+      description: 说明确定性测试如何证明该结果。
     validations:
       required: true

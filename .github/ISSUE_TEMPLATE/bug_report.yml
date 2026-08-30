@@ -1,57 +1,57 @@
-name: Bug report
-description: Report a reproducible ToolSpan defect using synthetic data
+name: Bug 报告
+description: 使用 synthetic data 报告可复现的 ToolSpan 缺陷
 title: "[Bug]: "
 body:
   - type: markdown
     attributes:
       value: |
-        Do not include secrets, real configuration, private paths, account IDs, or user data. Report security vulnerabilities through the private process in SECURITY.md.
+        请不要包含 Secret、真实配置、私人路径、账号 ID 或用户数据。安全漏洞请通过 SECURITY.md 中的私有流程报告。
   - type: input
     id: version
     attributes:
-      label: ToolSpan version or commit
-      description: Use a version or commit identifier; do not paste diagnostics containing private data.
+      label: ToolSpan 版本或 commit
+      description: 使用版本或 commit 标识；不要粘贴包含私人数据的诊断信息。
     validations:
       required: true
   - type: dropdown
     id: area
     attributes:
-      label: Area
+      label: 领域
       options:
-        - Configuration or startup
-        - OAuth or MCP protocol
-        - Workspace or files
-        - Jobs or runners
-        - Artifacts
-        - Documentation or release checks
+        - 配置或启动
+        - OAuth 或 MCP 协议
+        - 工作区或文件
+        - 作业或运行器
+        - 制品
+        - 文档或 Release 检查
     validations:
       required: true
   - type: textarea
     id: reproduction
     attributes:
-      label: Minimal reproduction
-      description: Use synthetic paths and data. Include the exact safe commands run.
+      label: 最小复现
+      description: 使用 synthetic paths 和 data。包含实际运行的安全命令。
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Expected result
+      label: 预期结果
     validations:
       required: true
   - type: textarea
     id: actual
     attributes:
-      label: Actual result
-      description: Redact secrets, config contents, private paths, and user data.
+      label: 实际结果
+      description: 对 Secret、配置内容、私人路径和用户数据进行脱敏。
     validations:
       required: true
   - type: checkboxes
     id: safety
     attributes:
-      label: Safety confirmation
+      label: 安全确认
       options:
-        - label: I used synthetic data and removed secrets and private identifiers.
+        - label: 我使用了 synthetic data，并移除了 Secret 和私人标识符。
           required: true
-        - label: This is not a private security vulnerability report.
+        - label: 这不是私有安全漏洞报告。
           required: true

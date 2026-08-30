@@ -1,20 +1,20 @@
-## What changed
+## 变更内容
 
-Describe the problem and the smallest implemented solution. Include applicable Requirement IDs.
+描述问题与选择的最小解决方案。如适用，附上对应的 Requirement ID。
 
-## Verification
+## 验证
 
-List the exact commands actually run and their results. Do not write “expected to pass.”
+列出实际运行的命令及其真实结果。不要写“预计通过”。
 
-## Security boundaries
+## 安全边界
 
-- [ ] Exact 27 Tool Contract is unchanged, or an approved requirement and fixture explain the change.
-- [ ] No arbitrary Shell, MCP Client, Gateway, Agent Runtime, or public admin route was added.
-- [ ] Allowed roots, path/link checks, Host/Origin checks, OAuth scopes, runner allowlists, and `shell: false` were not weakened.
-- [ ] No secret, real config, private path, user data, external-account identifier, log, or receipt is included.
+- [ ] 精确的 27 Tool Contract 保持不变，或由已批准的需求与 fixture 说明变更。
+- [ ] 未添加任意 Shell、MCP Client、Gateway、Agent Runtime 或公网管理路由。
+- [ ] allowed roots、路径/link 检查、Host/Origin 检查、OAuth scopes、runner allowlists 与 `shell: false` 未被削弱。
+- [ ] 不包含 Secret、真实配置、私人路径、用户数据、外部账号标识符、日志或 receipt。
 
-## Scope and release
+## 范围与发布
 
-- [ ] The diff is limited to the requested change; unrelated user edits were preserved.
-- [ ] External, native, legal, and Owner gates are reported separately from deterministic source checks.
-- [ ] This pull request does not create a tag or release.
+- [ ] diff 限定于请求的变更；无关的用户改动已保留。
+- [ ] 外部、原生、法律与 Owner 门禁与确定性源码检查分开报告。
+- [ ] 本 pull request 不创建 tag 或 release。
