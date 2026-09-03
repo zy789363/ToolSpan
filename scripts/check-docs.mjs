@@ -1,91 +1,85 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const TOOLS = [
-  "open_workspace", "list_workspaces", "resume_workspace",
-  "read", "write", "edit", "search_files", "list_directory", "stat_path", "make_directory",
-  "move_path", "copy_path", "delete_path", "restore_path", "read_many", "apply_patch", "import_asset",
-  "start_job", "poll_job", "cancel_job", "list_jobs",
-  "start_capture", "inspect_artifact", "list_artifacts", "preview_artifact", "publish_artifact",
-  "devspace_info",
+const REQUIRED_HEADINGS = [
+  "## 为什么使用 ToolSpan",
+  "## 工作方式",
+  "## 快速开始",
+  "## 开始第一个编程任务",
+  "## 安全边界",
+  "## 常见问题",
+  "## 更多文档",
 ];
 
 function assert(condition, message) {
   if (!condition) throw new Error(`docs check: ${message}`);
 }
 
-async function text(relativePath) {
-  return readFile(path.join(ROOT, relativePath), "utf8");
-}
-
-function contractTools(content, relativePath) {
-  const start = content.indexOf("<!-- tool-contract:start -->");
-  const end = content.indexOf("<!-- tool-contract:end -->");
-  assert(start >= 0 && end > start, `${relativePath} must contain one tool-contract block`);
-  const block = content.slice(start, end);
-  return [...block.matchAll(/`([a-z][a-z0-9_]*)`/gu)].map((match) => match[1]);
-}
-
-function requireInOrder(content, earlier, later, relativePath) {
-  const earlierIndex = content.indexOf(earlier);
-  const laterIndex = content.indexOf(later);
-  assert(earlierIndex >= 0, `${relativePath} is missing ${earlier}`);
-  assert(laterIndex >= 0, `${relativePath} is missing ${later}`);
-  assert(earlierIndex < laterIndex, `${relativePath} must show ${earlier} before ${later}`);
+function requireInOrder(content, values) {
+  let cursor = -1;
+  for (const value of values) {
+    const index = content.indexOf(value);
+    assert(index > cursor, `README.md is missing or misorders ${value}`);
+    cursor = index;
+  }
 }
 
 async function main() {
-  const [english, chinese, usage] = await Promise.all([
-    text("README.md"),
-    text("README.zh-CN.md"),
-    text(path.join("docs", "usage", "chatgpt-chat-vs-codex.md")),
-  ]);
+  const readme = await readFile(path.join(ROOT, "README.md"), "utf8");
+  const lineCount = readme.trimEnd().split(/\r?\n/u).length;
 
-  assert(english.startsWith("# ToolSpan\n"), "README.md must be the primary Chinese ToolSpan README");
-  assert(chinese.startsWith("# ToolSpan\n"), "README.zh-CN.md must be a full Chinese ToolSpan README");
-  for (const heading of [
-    "## 本地工具与远程工具",
-    "## 安全警告",
-    "## 快速开始：确定性本地 Smoke",
-    "## 远程连接概览",
-    "## 四个常用工作流",
-    "## 精确的 27 个工具契约",
-    "## ChatGPT Chat、MCP 与 Codex 用量",
-    "## 故障排查决策树",
+  assert(readme.includes('<h1 align="center">ToolSpan</h1>'), "README.md must have the centered ToolSpan hero");
+  assert(readme.includes('src="apps/desktop/src-tauri/icons/app-icon.png"'), "README.md must show the product icon");
+  assert(readme.includes("github.com/zy789363/ToolSpan/releases/latest"), "README.md must expose the primary download action");
+  assert(readme.includes("actions/workflows/core.yml/badge.svg"), "README.md must show Core CI status");
+  assert(lineCount <= 140, `README.md must remain scannable, found ${lineCount} lines`);
+  requireInOrder(readme, REQUIRED_HEADINGS);
+
+  for (const required of [
+    "GUI 优先",
+    "MCP 工具 `27/27`",
+    "设置 → 运行时 → 选择 Node 可执行文件",
+    "Scoped API Token",
+    "验证凭证并运行 Preflight",
+    "生成 Dry Run",
+    "为 Apply 重新输入凭证",
+    "Apply 已确认计划",
+    "Host 接入教程",
+    "Settings → Security and login",
+    "Developer mode",
+    "https://developers.openai.com/plugins/deploy/connect-chatgpt",
+    "devspace_info",
+    "[设置文档索引](docs/setup/index.md)",
+    "[非 GUI 配置与部署](docs/deployment.md)",
   ]) {
-    assert(english.includes(heading), `README.md is missing Chinese-first heading ${heading}`);
-    assert(chinese.includes(heading), `README.zh-CN.md is missing ${heading}`);
+    assert(readme.includes(required), `README.md is missing ${required}`);
   }
 
-  for (const readme of [english, chinese]) {
-    assert(readme.includes("Codex") && readme.includes("ToolSpan MCP"), "README must distinguish Codex-local and ToolSpan-remote actions");
-    assert(readme.includes("npm.cmd run verify:core"), "README must include the deterministic Core verification command");
-    assert(readme.includes("npm.cmd run smoke:core-release"), "README must include the local packed-release smoke");
-    assert(readme.includes("devspace_info") && readme.includes("instanceName"), "README must require instance confirmation before writes/jobs");
-    assert(readme.includes("shell: false"), "README must preserve the shell:false boundary");
-    assert(readme.includes("headless") || readme.includes("无头"), "README must present headless Core as a complete path");
-  }
-  requireInOrder(english, "## 安全警告", "### 2. 修改并测试", "README.md");
-  requireInOrder(chinese, "## 安全警告", "### 2. 修改并测试", "README.zh-CN.md");
-
-  const expected = [...TOOLS].sort();
-  for (const [relativePath, content] of [["README.md", english], ["README.zh-CN.md", chinese]]) {
-    const actual = contractTools(content, relativePath).sort();
-    assert(actual.length === 27, `${relativePath} tool-contract block must contain 27 tools, found ${actual.length}`);
-    assert(actual.every((name, index) => name === expected[index]), `${relativePath} tool-contract block does not match the exact contract`);
+  for (const forbidden of ["```powershell", "npm.cmd", "toolspan.config.json", "ownerPasswordHashFile", "publicBaseUrl", "Invoke-RestMethod", "New-Item"]) {
+    assert(!readme.includes(forbidden), `README.md must link to non-GUI setup instead of embedding ${forbidden}`);
   }
 
-  assert(usage.includes("## English") && usage.includes("## 中文"), "usage guide must be bilingual");
-  assert(usage.includes("STALE_FALLBACK") && usage.includes("30 days") && usage.includes("30 天"), "usage guide must explain the stale fallback in both languages");
-  assert(usage.includes("Ordinary CI never fetches") && usage.includes("普通 CI 不会抓取"), "usage guide must state that ordinary CI is offline");
+  await access(path.join(ROOT, "apps", "desktop", "src-tauri", "icons", "app-icon.png"));
+  const localLinks = [...readme.matchAll(/\[[^\]]+\]\(([^)]+)\)/gu)]
+    .map((match) => match[1])
+    .filter((target) => !/^https?:\/\//u.test(target) && !target.startsWith("#"));
+  for (const target of localLinks) {
+    try {
+      await access(path.resolve(ROOT, target));
+    } catch {
+      assert(false, `README.md contains a missing local link: ${target}`);
+    }
+  }
 
   process.stdout.write(`${JSON.stringify({
     status: "PASS",
-    readmes: ["README.md", "README.zh-CN.md"],
-    tools: "27/27",
-    usageGuide: "PASS",
+    readme: "README.md",
+    primaryPath: "GUI",
+    sections: REQUIRED_HEADINGS.length,
+    lines: lineCount,
+    localLinks: localLinks.length,
   })}\n`);
 }
 

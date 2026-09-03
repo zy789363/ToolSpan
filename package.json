@@ -17,7 +17,6 @@
     "docs/deployment.md",
     "docs/product-contract.md",
     "docs/threat-model.md",
-    "docs/usage/**",
     "docs/setup/**",
     "docs/prompts/**",
     "config/*.json",
@@ -27,11 +26,8 @@
     "scripts/runtime-preflight.mjs",
     "toolspan.config.example.json",
     "README.md",
-    "README.zh-CN.md",
     "LICENSE",
-    "SECURITY.md",
-    "SUPPORT.md",
-    "CHANGELOG.md"
+    "SECURITY.md"
   ],
   "scripts": {
     "prebuild": "node scripts/clean-dist.mjs",

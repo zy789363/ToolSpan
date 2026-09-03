@@ -7,11 +7,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REQUIRED = [
   "LICENSE",
   "SECURITY.md",
-  "CONTRIBUTING.md",
-  "CODE_OF_CONDUCT.md",
-  "SUPPORT.md",
-  "CHANGELOG.md",
-  "ROADMAP.md",
   ".github/ISSUE_TEMPLATE/bug_report.yml",
   ".github/ISSUE_TEMPLATE/feature_request.yml",
   ".github/ISSUE_TEMPLATE/config.yml",
@@ -51,9 +46,7 @@ async function main() {
   assert(packageLock.packages?.[""]?.license === "Apache-2.0", "package-lock.json root license must be Apache-2.0");
   assert(shrinkwrap.packages?.[""]?.license === "Apache-2.0", "npm-shrinkwrap.json root license must be Apache-2.0");
 
-  for (const relativePath of ["SECURITY.md", "CODE_OF_CONDUCT.md", "SUPPORT.md"]) {
-    assert(contents.get(relativePath).includes("OWNER GATE"), `${relativePath} must expose missing owner contact/identity`);
-  }
+  assert(contents.get("SECURITY.md").includes("OWNER GATE"), "SECURITY.md must expose missing owner contact/identity");
   assert(contents.get("SECURITY.md").includes("不要创建公开 issue"), "SECURITY.md must direct vulnerability reports away from public issues");
 
   const joined = [...contents.values()].join("\n");

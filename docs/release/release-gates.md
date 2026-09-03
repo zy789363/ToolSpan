@@ -43,7 +43,7 @@ SBOM 从根 `package-lock.json`、Desktop 独立 `package-lock.json` 和 `cargo 
 | `E-WIN-01` | Windows Release 必需 | `PASS`；Owner 手工 Tray smoke 与既有安装/生命周期/进程 evidence 已绑定当前 MSI/NSIS hash |
 | `E-SIGN-01` | 可选未签名（unsigned） | `NOT_CONFIGURED` |
 | `E-CF-TOKEN-01` | Cloudflare 一键声明（one-click Cloudflare claim）前必需 | `PASS`；scoped-token API 生命周期、public HTTPS/OAuth/exact27 与仅限自有资源清理（owned cleanup）的闭集证据已验证 |
-| `E-CF-WIN-01` | Windows 一键声明（one-click claim）前必需 | `BLOCKED_BY_ENVIRONMENT`；源码工具链已就绪（`scripts/cloudflared-service-lifecycle.ps1` + `uninstall-cloudflared-service.ps1` + 静态测试 + `docs/release/windows-cloudflared-service-validation.md`）。2026-08-23 Owner 决定跳过真实管理员 VM 验证，同时将 `WINDOWS_ONE_CLICK_VALIDATED` claim 置为 `inactive`（basis=`WINDOWS_SETUP_USES_MANUAL_CLOUDFLARED_ONLY`）——Desktop 实际使用手动 cloudflared adapter，不承诺自动安装 Windows service，因此本 gate 不再阻塞 `RELEASE_READY`；若未来重新宣传 Windows one-click cloudflared，必须先恢复 claim active 并补齐验证 |
+| `E-CF-WIN-01` | Windows 一键声明（one-click claim）前必需 | `BLOCKED_BY_ENVIRONMENT`；源码工具链已就绪（`scripts/cloudflared-service-lifecycle.ps1` + `uninstall-cloudflared-service.ps1` + 静态测试）。2026-08-23 Owner 决定跳过真实管理员 VM 验证，同时将 `WINDOWS_ONE_CLICK_VALIDATED` claim 置为 `inactive`（basis=`WINDOWS_SETUP_USES_MANUAL_CLOUDFLARED_ONLY`）——Desktop 实际使用手动 cloudflared adapter，不承诺自动安装 Windows service，因此本 gate 不再阻塞 `RELEASE_READY`；若未来重新宣传 Windows one-click cloudflared，必须先恢复 claim active 并补齐验证 |
 | `E-HOST-01` | Release 必需 | `PASS`；Inspector 2.3.0 OAuth/exact 27/read/write/job/read-only rejection 闭集证据已验证 |
 | `E-CODEX-01` | Release 必需 | `PASS`；真实 Codex 远程 OAuth/exact 27/read/write/job/hash isolation/cleanup proof 已验证 |
 | `E-CGPT-UI-01` | 非 Release 必需 | `EXTERNAL_GATE_PENDING`（UI capability 已观察；连接/OAuth/tool scan 未完成） |

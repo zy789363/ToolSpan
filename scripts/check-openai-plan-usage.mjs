@@ -303,15 +303,6 @@ async function parseJsonFile(filePath, labelText) {
   }
 }
 
-function snapshotKeyMarker(snapshot) {
-  const keys = [
-    ...Object.keys(snapshot.chat).map((key) => `chat.${key}`),
-    ...Object.keys(snapshot.codexLocalMessagesPer5h).map((key) => `codex.${key}`),
-    ...Object.keys(snapshot.mcpAvailability).map((key) => `mcp.${key}`),
-  ];
-  return `<!-- openai-plan-usage-keys: ${keys.join(",")} -->`;
-}
-
 async function validateSchemaDescriptor(schema) {
   exactKeys(schema, ["$schema", "$id", "title", "type", "additionalProperties", "required", "properties", "$defs"], "schema");
   if (schema.$schema !== "https://json-schema.org/draft/2020-12/schema") fail("schema must use JSON Schema 2020-12");
@@ -322,45 +313,14 @@ async function validateSchemaDescriptor(schema) {
   }
 }
 
-async function validateDocs(snapshot) {
-  const marker = snapshotKeyMarker(snapshot);
-  const files = [
-    ["README.md", "English README"],
-    ["README.zh-CN.md", "Chinese README"],
-    [path.join("docs", "usage", "chatgpt-chat-vs-codex.md"), "usage guide"],
-  ];
-  for (const [relativePath, description] of files) {
-    const content = await readFile(path.join(PROJECT_ROOT, relativePath), "utf8");
-    if (!content.includes(marker)) fail(`${description} is not synchronized with snapshot plan keys`);
-    if (!content.includes("config/openai-plan-usage.snapshot.json")) {
-      fail(`${description} must identify the snapshot source`);
-    }
-  }
-
-  const english = await readFile(path.join(PROJECT_ROOT, "README.md"), "utf8");
-  const chinese = await readFile(path.join(PROJECT_ROOT, "README.zh-CN.md"), "utf8");
-  const guide = await readFile(path.join(PROJECT_ROOT, "docs", "usage", "chatgpt-chat-vs-codex.md"), "utf8");
-  for (const unit of ["ChatGPT Chat", "MCP tool call", "Codex message/task"]) {
-    if (!english.includes(unit)) fail(`English README must distinguish ${unit}`);
-  }
-  for (const unit of ["ChatGPT Chat", "MCP Tool Call", "Codex message/task"]) {
-    if (!chinese.includes(unit)) fail(`Chinese README must distinguish ${unit}`);
-  }
-  for (const source of Object.values(snapshot.sources)) {
-    if (!guide.includes(source)) fail("usage guide sources must match the snapshot");
-  }
+async function validateDocs() {
+  const readme = await readFile(path.join(PROJECT_ROOT, "README.md"), "utf8");
   const forbiddenClaims = [
     /0\s*token\s*unlimited/iu,
     /plus\s+(?:has|includes|supports)\s+full\s+(?:write|modify)/iu,
   ];
-  for (const [relativePath] of files) {
-    const content = await readFile(path.join(PROJECT_ROOT, relativePath), "utf8");
-    if (forbiddenClaims.some((pattern) => pattern.test(content))) {
-      fail(`${relativePath} contains a prohibited usage claim`);
-    }
-  }
-  if (!guide.includes("does not claim a fixed exchange rate") || !guide.includes("不声明固定兑换比例")) {
-    fail("usage guide must explicitly reject a fixed Chat/MCP/Codex conversion rate");
+  if (forbiddenClaims.some((pattern) => pattern.test(readme))) {
+    fail("README.md contains a prohibited usage claim");
   }
 }
 
@@ -394,7 +354,7 @@ export async function run(arguments_ = process.argv.slice(2)) {
   ]);
   await validateSchemaDescriptor(schema);
   const state = freshness(snapshot, options.now);
-  if (!options.skipDocs) await validateDocs(snapshot);
+  if (!options.skipDocs) await validateDocs();
 
   if (options.render !== undefined) {
     process.stdout.write(renderUsageMarkdown(snapshot, options.now, options.render));
