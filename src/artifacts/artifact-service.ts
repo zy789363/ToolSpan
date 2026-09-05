@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { JobService } from "../jobs/job-service.js";
@@ -52,6 +52,46 @@ interface SnapshotEntry {
   modifiedAt: string;
 }
 
+async function readStableFileMetadata(
+  entryPath: string,
+  canonicalPath: string,
+): Promise<SnapshotEntry | undefined> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    const before = await lstat(entryPath);
+    if (!before.isFile()) return undefined;
+    const beforeCanonical = await realpath(entryPath);
+    if (comparisonPath(beforeCanonical) !== comparisonPath(canonicalPath)) return undefined;
+    handle = await open(canonicalPath, "r");
+    const metadata = await handle.stat();
+    if (!metadata.isFile()) return undefined;
+    const afterCanonical = await realpath(entryPath);
+    if (comparisonPath(afterCanonical) !== comparisonPath(canonicalPath)) return undefined;
+    return {
+      path: "",
+      size: metadata.size,
+      modifiedAt: metadata.mtime.toISOString(),
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
+function comparisonPath(value: string): string {
+  const resolved = path.resolve(value);
+  return process.platform === "win32" ? resolved.toLocaleLowerCase("en-US") : resolved;
+}
+
+function isWithin(candidatePath: string, rootPath: string): boolean {
+  const relative = path.relative(comparisonPath(rootPath), comparisonPath(candidatePath));
+  return relative === "" || (
+    relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+  );
+}
+
 async function createWorkspaceSnapshot(root: string): Promise<Buffer> {
   const entries: SnapshotEntry[] = [];
   const visit = async (directory: string, relativeDirectory: string): Promise<void> => {
@@ -61,16 +101,24 @@ async function createWorkspaceSnapshot(root: string): Promise<Buffer> {
       if (child.name === ".git" || child.name === ".webgpt") continue;
       const relativePath = path.join(relativeDirectory, child.name);
       const absolutePath = path.join(directory, child.name);
-      if (child.isSymbolicLink()) continue;
-      if (child.isDirectory()) {
-        await visit(absolutePath, relativePath);
-      } else if (child.isFile()) {
-        const metadata = await stat(absolutePath);
-        entries.push({
-          path: relativePath.replaceAll("\\", "/"),
-          size: metadata.size,
-          modifiedAt: metadata.mtime.toISOString(),
-        });
+      const childStats = await lstat(absolutePath);
+      if (childStats.isSymbolicLink()) continue;
+      let canonicalPath: string;
+      try {
+        canonicalPath = await realpath(absolutePath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+        throw error;
+      }
+      if (!isWithin(canonicalPath, root)) continue;
+      if (comparisonPath(canonicalPath) !== comparisonPath(absolutePath)) continue;
+      if (childStats.isDirectory()) {
+        await visit(canonicalPath, relativePath);
+      } else if (childStats.isFile()) {
+        const metadata = await readStableFileMetadata(absolutePath, canonicalPath);
+        if (metadata !== undefined) {
+          entries.push({ ...metadata, path: relativePath.replaceAll("\\", "/") });
+        }
       }
     }
   };

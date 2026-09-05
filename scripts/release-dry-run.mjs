@@ -23,6 +23,8 @@ export const releaseEvidenceRoot = path.join(projectRoot, ".toolspan-dev", "evid
 const desktopRoot = path.join(projectRoot, "apps", "desktop");
 const tauriRoot = path.join(desktopRoot, "src-tauri");
 export const WINDOWS_X64_RELEASE_TARGET = "x86_64-pc-windows-msvc";
+export const SOURCE_PROVENANCE_SCHEMA_VERSION = "1.0";
+export const DIST_PROVENANCE_SCHEMA_VERSION = "1.0";
 const CARGO_METADATA_ARGUMENTS = Object.freeze([
   "metadata",
   "--locked",
@@ -96,6 +98,115 @@ async function listFiles(root) {
   };
   await visit(root);
   return result.sort((left, right) => left.localeCompare(right));
+}
+
+function isWithinRoot(root, candidate) {
+  const resolvedRoot = path.resolve(root);
+  const resolvedCandidate = path.resolve(candidate);
+  return resolvedCandidate === resolvedRoot || resolvedCandidate.startsWith(`${resolvedRoot}${path.sep}`);
+}
+
+function hashRecords(records) {
+  const hash = createHash("sha256");
+  for (const record of records) hash.update(`${JSON.stringify(record)}\n`);
+  return hash.digest("hex");
+}
+
+async function runCapturedCommand(command, runner, environment, failureCode) {
+  let result;
+  try {
+    result = await runner(command, { environment });
+  } catch {
+    throw releaseError(failureCode);
+  }
+  if (!result?.started || result.code !== 0) throw releaseError(failureCode);
+  return result.stdout;
+}
+
+export function validateSourceProvenance(value) {
+  if (!isRecord(value) || !hasExactKeys(value, [
+    "schemaVersion", "gitHead", "sourceTreeSha256", "sourceFileCount", "dirty",
+    "statusSha256", "statusEntryCount",
+  ])) return false;
+  return value.schemaVersion === SOURCE_PROVENANCE_SCHEMA_VERSION
+    && /^[a-f0-9]{40,64}$/iu.test(value.gitHead)
+    && /^[a-f0-9]{64}$/iu.test(value.sourceTreeSha256)
+    && Number.isInteger(value.sourceFileCount)
+    && value.sourceFileCount > 0
+    && typeof value.dirty === "boolean"
+    && /^[a-f0-9]{64}$/iu.test(value.statusSha256)
+    && Number.isInteger(value.statusEntryCount)
+    && value.statusEntryCount >= 0;
+}
+
+export function compareSourceProvenance(expected, actual) {
+  if (!validateSourceProvenance(expected) || !validateSourceProvenance(actual)) {
+    return { match: false, mismatches: ["SCHEMA"] };
+  }
+  const mismatches = [
+    "gitHead", "sourceTreeSha256", "sourceFileCount", "dirty", "statusSha256", "statusEntryCount",
+  ].filter((key) => expected[key] !== actual[key]);
+  return { match: mismatches.length === 0, mismatches };
+}
+
+export async function collectSourceProvenance(options = {}) {
+  const environment = options.environment ?? process.env;
+  const runner = options.runner ?? executeReleaseCommand;
+  const git = options.git ?? await resolveExecutable("git", { environment });
+  if (git === null) throw releaseError("GIT_NOT_FOUND");
+  const gitCommand = (arguments_) => ({
+    id: "SOURCE_PROVENANCE_GIT",
+    command: git,
+    arguments: ["-C", projectRoot, ...arguments_],
+    cwd: projectRoot,
+    capture: true,
+  });
+  const [fileList, headOutput, statusOutput] = await Promise.all([
+    runCapturedCommand(
+      gitCommand(["ls-files", "--cached", "--others", "--exclude-standard", "-z"]),
+      runner,
+      environment,
+      "RELEASE_SOURCE_PROVENANCE_GIT_FAILED",
+    ),
+    runCapturedCommand(
+      gitCommand(["rev-parse", "HEAD"]),
+      runner,
+      environment,
+      "RELEASE_SOURCE_PROVENANCE_GIT_FAILED",
+    ),
+    runCapturedCommand(
+      gitCommand(["status", "--porcelain=v1", "--untracked-files=all", "-z"]),
+      runner,
+      environment,
+      "RELEASE_SOURCE_PROVENANCE_GIT_FAILED",
+    ),
+  ]);
+  const paths = [...new Set(fileList.split("\0").filter(Boolean).map(normalizeRelative))].sort();
+  const records = [];
+  for (const relativePath of paths) {
+    const filePath = path.resolve(projectRoot, relativePath);
+    if (!isWithinRoot(projectRoot, filePath)) throw releaseError("RELEASE_SOURCE_PROVENANCE_PATH_UNSAFE");
+    let contentHash = "MISSING";
+    try {
+      contentHash = await sha256File(filePath);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw releaseError("RELEASE_SOURCE_PROVENANCE_READ_FAILED");
+    }
+    records.push({ path: relativePath, sha256: contentHash });
+  }
+  const gitHead = headOutput.trim();
+  const statusEntries = statusOutput.split("\0").filter(Boolean);
+  const provenance = {
+    schemaVersion: SOURCE_PROVENANCE_SCHEMA_VERSION,
+    gitHead,
+    sourceTreeSha256: hashRecords(records),
+    sourceFileCount: records.length,
+    dirty: statusOutput.length > 0,
+    statusSha256: createHash("sha256").update(statusOutput).digest("hex"),
+    statusEntryCount: statusEntries.length,
+  };
+  if (!validateSourceProvenance(provenance)) throw releaseError("RELEASE_SOURCE_PROVENANCE_INVALID");
+  return provenance;
 }
 
 function tarFieldText(field) {
@@ -449,6 +560,36 @@ export function validateReleaseLifecycleScripts(rootPackage, desktopPackage) {
     const scripts = packageDocument?.scripts;
     for (const [name, expected] of Object.entries(RELEASE_LIFECYCLE_ALLOWLIST[label])) {
       if (scripts?.[name] !== expected) errors.push(`${label}_${name.toUpperCase()}_NOT_ALLOWLISTED`);
+    }
+  }
+  return errors;
+}
+
+export function validateReleaseVersions({
+  rootPackageVersion,
+  desktopPackageVersion,
+  tauriVersion,
+  cargoVersion,
+  distVersion,
+}) {
+  const errors = [];
+  const versions = [
+    ["ROOT_PACKAGE", rootPackageVersion],
+    ["DESKTOP_PACKAGE", desktopPackageVersion],
+    ["TAURI", tauriVersion],
+    ["CARGO", cargoVersion],
+    ["DIST", distVersion],
+  ];
+  const rootVersion = rootPackageVersion;
+  if (typeof rootVersion !== "string" || rootVersion.trim().length === 0) {
+    errors.push("RELEASE_VERSION_MISSING:ROOT_PACKAGE");
+    return errors;
+  }
+  for (const [name, version] of versions.slice(1)) {
+    if (typeof version !== "string" || version.trim().length === 0) {
+      errors.push(`RELEASE_VERSION_MISSING:${name}`);
+    } else if (version !== rootVersion) {
+      errors.push(`RELEASE_VERSION_MISMATCH:${name}`);
     }
   }
   return errors;
@@ -940,6 +1081,119 @@ async function collectRendererManifest() {
   })));
 }
 
+async function collectDirectoryProvenance(root, requiredFile) {
+  const files = await listFiles(root);
+  if (files.length === 0 || !files.some((filePath) => path.basename(filePath) === requiredFile)) {
+    throw releaseError("RELEASE_DIST_OUTPUT_MISSING");
+  }
+  const records = await Promise.all(files.map(async (filePath) => ({
+    path: normalizeRelative(path.relative(projectRoot, filePath)),
+    bytes: (await stat(filePath)).size,
+    sha256: await sha256File(filePath),
+  })));
+  return {
+    directory: normalizeRelative(path.relative(projectRoot, root)),
+    fileCount: records.length,
+    sha256: hashRecords(records),
+  };
+}
+
+async function collectRendererSourceMapProvenance(rendererRoot) {
+  const mapFiles = (await listFiles(rendererRoot)).filter((filePath) => filePath.endsWith(".map"));
+  if (mapFiles.length === 0) throw releaseError("RELEASE_RENDERER_SOURCEMAP_MISSING");
+  const sourceRoot = path.join(desktopRoot, "src");
+  let mappedSourceFiles = 0;
+  for (const mapFile of mapFiles) {
+    let sourceMap;
+    try {
+      sourceMap = JSON.parse(await readFile(mapFile, "utf8"));
+    } catch {
+      throw releaseError("RELEASE_RENDERER_SOURCEMAP_INVALID");
+    }
+    if (!Array.isArray(sourceMap.sources) || !Array.isArray(sourceMap.sourcesContent)
+      || sourceMap.sources.length !== sourceMap.sourcesContent.length) {
+      throw releaseError("RELEASE_RENDERER_SOURCEMAP_INVALID");
+    }
+    for (let index = 0; index < sourceMap.sources.length; index += 1) {
+      const source = sourceMap.sources[index];
+      const content = sourceMap.sourcesContent[index];
+      if (typeof source !== "string" || typeof content !== "string") continue;
+      const sourcePath = path.resolve(path.dirname(mapFile), source);
+      if (!isWithinRoot(sourceRoot, sourcePath)) continue;
+      try {
+        if (content !== await readFile(sourcePath, "utf8")) {
+          throw releaseError("RELEASE_RENDERER_SOURCEMAP_STALE");
+        }
+      } catch (error) {
+        if (error?.code === "ENOENT") throw releaseError("RELEASE_RENDERER_SOURCE_MISSING");
+        throw error;
+      }
+      mappedSourceFiles += 1;
+    }
+  }
+  if (mappedSourceFiles === 0) throw releaseError("RELEASE_RENDERER_SOURCEMAP_HAS_NO_SOURCE");
+  return { sourceMapFiles: mapFiles.length, mappedSourceFiles };
+}
+
+async function builtServiceVersion() {
+  const serviceInfoPath = path.join(projectRoot, "dist", "service-info.js");
+  try {
+    const module = await import(`${pathToFileURL(serviceInfoPath).href}?release=${randomUUID()}`);
+    return module.SERVICE_INFO?.version;
+  } catch {
+    throw releaseError("RELEASE_DIST_SERVICE_INFO_INVALID");
+  }
+}
+
+export async function collectDistProvenance(options = {}) {
+  const rootDist = path.join(projectRoot, "dist");
+  const rendererDist = path.join(desktopRoot, "dist");
+  const [root, renderer, serviceInfoVersion, rendererSourceMap] = await Promise.all([
+    collectDirectoryProvenance(rootDist, "service-info.js"),
+    collectDirectoryProvenance(rendererDist, "index.html"),
+    options.serviceInfoVersion ?? builtServiceVersion(),
+    collectRendererSourceMapProvenance(rendererDist),
+  ]);
+  return {
+    schemaVersion: DIST_PROVENANCE_SCHEMA_VERSION,
+    toolSpanVersion: options.toolSpanVersion ?? serviceInfoVersion,
+    root: { ...root, serviceInfoVersion },
+    renderer: { ...renderer, ...rendererSourceMap },
+  };
+}
+
+export function validateDistProvenance(value, expectedVersion = undefined) {
+  if (!isRecord(value) || !hasExactKeys(value, ["schemaVersion", "toolSpanVersion", "root", "renderer"])
+    || !isRecord(value.root) || !isRecord(value.renderer)
+    || !hasExactKeys(value.root, ["directory", "fileCount", "sha256", "serviceInfoVersion"])
+    || !hasExactKeys(value.renderer, ["directory", "fileCount", "sha256", "sourceMapFiles", "mappedSourceFiles"])) {
+    return false;
+  }
+  const hash = (candidate) => typeof candidate === "string" && /^[a-f0-9]{64}$/iu.test(candidate);
+  return value.schemaVersion === DIST_PROVENANCE_SCHEMA_VERSION
+    && typeof value.toolSpanVersion === "string"
+    && (expectedVersion === undefined || value.toolSpanVersion === expectedVersion)
+    && value.root.directory === "dist"
+    && Number.isInteger(value.root.fileCount) && value.root.fileCount > 0
+    && hash(value.root.sha256)
+    && value.root.serviceInfoVersion === value.toolSpanVersion
+    && value.renderer.directory === "apps/desktop/dist"
+    && Number.isInteger(value.renderer.fileCount) && value.renderer.fileCount > 0
+    && hash(value.renderer.sha256)
+    && Number.isInteger(value.renderer.sourceMapFiles) && value.renderer.sourceMapFiles > 0
+    && Number.isInteger(value.renderer.mappedSourceFiles) && value.renderer.mappedSourceFiles > 0;
+}
+
+export function compareDistProvenance(expected, actual) {
+  if (!validateDistProvenance(expected) || !validateDistProvenance(actual)) {
+    return { match: false, mismatches: ["SCHEMA"] };
+  }
+  const mismatches = [
+    "schemaVersion", "toolSpanVersion", "root", "renderer",
+  ].filter((key) => JSON.stringify(expected[key]) !== JSON.stringify(actual[key]));
+  return { match: mismatches.length === 0, mismatches };
+}
+
 export function selectNativeBundleCandidates(candidates, packageVersion) {
   const stale = [];
   const rejected = [];
@@ -1052,6 +1306,8 @@ export async function runReleaseDryRun(options = {}) {
   await mkdir(packDirectory, { recursive: true });
 
   const environment = verificationEnvironment(options.environment ?? process.env);
+  const sourceBefore = options.sourceProvenance
+    ?? await collectSourceProvenance({ environment, runner: options.provenanceRunner });
   const npmCli = options.npmCli ?? await resolveNpmCli(environment);
   if (npmCli === null) throw releaseError("NPM_CLI_NOT_FOUND");
   const cargo = options.cargo ?? await resolveExecutable("cargo", { environment });
@@ -1068,10 +1324,12 @@ export async function runReleaseDryRun(options = {}) {
     readFile(path.join(projectRoot, "scripts", "release-package-allowlist.json"), "utf8").then(JSON.parse),
   ]);
   const cargoVersion = /^version\s*=\s*"([^"]+)"\s*$/mu.exec(cargoManifestText)?.[1];
-  if (typeof packageDocument.version !== "string"
-    || desktopPackage.version !== packageDocument.version
-    || tauriConfig.version !== packageDocument.version
-    || cargoVersion !== packageDocument.version) throw releaseError("RELEASE_VERSION_MISMATCH");
+  if (validateReleaseVersions({
+    rootPackageVersion: packageDocument.version,
+    desktopPackageVersion: desktopPackage.version,
+    tauriVersion: tauriConfig.version,
+    cargoVersion,
+  }).length > 0) throw releaseError("RELEASE_VERSION_MISMATCH");
 
   const lifecycleErrors = validateReleaseLifecycleScripts(packageDocument, desktopPackage);
   if (lifecycleErrors.length > 0) throw releaseError("RELEASE_LIFECYCLE_NOT_ALLOWLISTED");
@@ -1086,6 +1344,12 @@ export async function runReleaseDryRun(options = {}) {
     if (command.id === "NPM_PACK") packResult = parsePackJson(result.stdout);
   }
   if (packResult === undefined) throw releaseError("NPM_PACK_NOT_EXECUTED");
+  const sourceAfter = options.sourceProvenanceAfter
+    ?? (options.sourceProvenance
+      ?? await collectSourceProvenance({ environment, runner: options.provenanceRunner }));
+  if (!compareSourceProvenance(sourceBefore, sourceAfter).match) {
+    throw releaseError("RELEASE_SOURCE_CHANGED_DURING_BUILD");
+  }
   const packageErrors = validatePackedFiles(packResult.files, allowlist);
   if (packageErrors.length > 0) {
     await writeJson(path.join(runDirectory, "package-findings.json"), {
@@ -1116,6 +1380,19 @@ export async function runReleaseDryRun(options = {}) {
     packagedFiles: packResult.files.length,
   };
   const rendererFiles = await collectRendererManifest();
+  const distProvenance = options.distProvenance ?? await collectDistProvenance({
+    toolSpanVersion: packageDocument.version,
+  });
+  if (!validateDistProvenance(distProvenance, packageDocument.version)
+    || validateReleaseVersions({
+      rootPackageVersion: packageDocument.version,
+      desktopPackageVersion: desktopPackage.version,
+      tauriVersion: tauriConfig.version,
+      cargoVersion,
+      distVersion: distProvenance.root.serviceInfoVersion,
+    }).length > 0) {
+    throw releaseError("RELEASE_VERSION_MISMATCH");
+  }
   const nativeBundles = await collectNativeBundles(packageDocument.version, runDirectory);
   const metadata = await cargoMetadata(cargo, environment, runner);
   const components = deduplicateComponents([
@@ -1198,6 +1475,8 @@ export async function runReleaseDryRun(options = {}) {
   const desktopBundleManifest = {
     schemaVersion: "1.0",
     toolSpanVersion: packageDocument.version,
+    sourceProvenance: sourceAfter,
+    distProvenance,
     rendererBuild: "PASS",
     rendererFiles,
     nativeValidation: nativeBundles.status,
@@ -1214,6 +1493,8 @@ export async function runReleaseDryRun(options = {}) {
     published: false,
     toolSpanVersion: packageDocument.version,
     generatedAt: createdAt,
+    sourceProvenance: sourceAfter,
+    distProvenance,
     npmPackage: {
       ...tarball,
       actualTarballTextContentScan: {

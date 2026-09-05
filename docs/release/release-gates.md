@@ -1,6 +1,6 @@
-# ToolSpan 发布（Release）自动门禁
+# ToolSpan v0.7.1 发布（Release）自动门禁
 
-本文记录发布（Release）阶段的自动装配边界和 `04_RELEASE_AND_EXTERNAL_GATES.md` 外部门禁。源码自动检查只能证明确定性结果；没有日期化、脱敏的真实证据时，Windows、Host、Cloudflare、GitHub 和 Owner 门禁不得成为 `PASS`。
+本文记录当前 v0.7.1 发布（Release）阶段的自动装配边界和 `04_RELEASE_AND_EXTERNAL_GATES.md` 外部门禁。文末 v0.6.0、v0.7.0 与 v0.7.1 条目是按日期保留的历史记录，不代表当前工作树版本。源码自动检查只能证明确定性结果；没有日期化、脱敏的真实证据时，Windows、Host、Cloudflare、GitHub 和 Owner 门禁不得成为 `PASS`。
 
 ## 自动命令
 
@@ -9,11 +9,12 @@
 ```text
 npm run verify:all:source
 npm run check:test-environment
+npm run test:source-scripts        # helper-test：无凭据的确定性脚本测试
 npm run release:dry-run
 npm run verify:release
 ```
 
-`verify:all:source` 通过解析后的 `npm-cli.js` 和 `shell: false` 顺序执行 `goal:check`、`verify:core`、`verify:desktop:source`、`verify:setup`。四个子项都不能调用 `verify:all:source`，因此不会递归。
+`test:source-scripts` 是发布门禁的 helper-test：只运行固定的本地 fixture、mock 和静态检查，不读取凭据，也不执行需要外部账号或人工授权的 E2E。`verify:all:source` 通过解析后的 `npm-cli.js` 和 `shell: false` 顺序执行 `goal:check`、`verify:core`、`verify:desktop:source`、`verify:setup`。四个子项都不能调用 `verify:all:source`，因此不会递归。
 
 `check:test-environment` 验证 `.toolspan-dev/test-environment.json` 的 schema v2 闭集。该文件只允许能力标志（capability flag）、Cloudflare Zone/Account ID、固定目标、状态枚举和 Secret 环境变量名；Secret value 数量必须为 0。当前 Owner profile 固定为 `aiqushi.top`、`mcp.aiqushi.top`、Chrome/computer-use 已授权、不要求 ChatGPT Business，并由 Codex 承担 write E2E。检查器不读取、更不输出所引用环境变量的 value。
 
@@ -31,6 +32,10 @@ desktop-native/*                 # 仅复制当前版本的既有 native bundle
 ```
 
 SBOM 从根 `package-lock.json`、Desktop 独立 `package-lock.json` 和 `cargo metadata --locked --offline --filter-platform x86_64-pc-windows-msvc` 生成，并记录 Cargo lock/manifest 输入 hash。证据不记录 Cargo 的本地 `manifest_path`。npm 包内容、生成的 manifest 与 SBOM 会执行 Secret-like value 和个人绝对路径扫描；报告只写 finding code 和相对文件名，不写命中内容。
+
+dry-run 还会把当前工作树的 Git HEAD、内容指纹、dirty 状态摘要写入 `sourceProvenance`，并对 Core `dist/` 与 Renderer `apps/desktop/dist/` 写入 `distProvenance`。版本 manifest 与编译后 `SERVICE_INFO` 必须一致；Renderer source map 必须能匹配当前源码。`verify:release` 会重新计算这些摘要，发现工作树或 dist 在 dry-run 后发生变化时 fail-safe 失败，不把旧产物当作当前发布物。dirty 状态本身会被如实记录；正式 tag/Release 前仍必须在干净工作树上重跑门禁。
+
+`.toolspan-dev/evidence/release/latest.json` 只是最新 dry-run 装配结果的闭集指针：`scope` 必须是 `RELEASE_DRY_RUN_ASSEMBLY`、`dryRunOnly` 必须为 `true`，且 `runDirectory` 与 `report` 只能指向同一 run 的 `artifact-manifest.json`。它不是正式 Release、`RELEASE_READY` 或任何外部门禁的证明；`latest-verification.json` 也只记录自动门禁验证结果，不能替代日期化的外部证据。
 
 旧版本 native bundle 会列入 `staleNativeArtifactsExcluded`，不会复制进当前 dry-run。即使存在当前版本 bundle，dry-run 也只报告 `ASSEMBLED_NOT_NATIVE_VALIDATED`；只有安装、托盘和 owned-process smoke 的日期化证据才能让 Windows 门禁（gate）成为 `PASS`。
 

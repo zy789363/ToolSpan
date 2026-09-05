@@ -31,7 +31,6 @@ const MAX_PUBLIC_REDIRECTS = 3;
 type Runtime = Awaited<ReturnType<typeof createRuntime>>;
 
 interface ActiveRuntime {
-  config: ToolSpanConfig;
   runtime: Runtime;
   server: Server;
 }
@@ -119,6 +118,18 @@ function summarizeConfig(config: ToolSpanConfig): ConfigSummary {
     stateDirectory: config.stateDirectory,
     allowedOrigins: [...config.allowedOrigins],
   };
+}
+
+function isSuccessfulSetupMutation(
+  method: DesktopServiceMethod,
+  result: unknown,
+): boolean {
+  if (method !== "setup.apply" && method !== "setup.rollback" && method !== "setup.reconcile") {
+    return false;
+  }
+  if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
+  const status = (result as { status?: unknown }).status;
+  return method === "setup.rollback" ? status === "ROLLED_BACK" : status === "COMPLETE";
 }
 
 function workspaceRoot(root: string): RuntimeSnapshot["workspaces"][number] {
@@ -286,6 +297,13 @@ export function createDesktopProductionService(
   let setupService = options.setupService;
   let state: RuntimeState = "stopped";
   let lastPublicReady: boolean | null = null;
+  let runtimeQueue: Promise<void> = Promise.resolve();
+
+  const runSerialized = <T>(operation: () => Promise<T>): Promise<T> => {
+    const result = runtimeQueue.then(operation, operation);
+    runtimeQueue = result.then(() => undefined, () => undefined);
+    return result;
+  };
 
   const appendLog = (message: string): void => {
     const line = `${new Date(now()).toISOString()} ${message}\n`;
@@ -308,23 +326,24 @@ export function createDesktopProductionService(
     for (const listener of listeners) listener(event);
   };
 
-  const loadCurrentConfig = async (): Promise<ToolSpanConfig> => active?.config ?? loadConfig(options.configPath);
+  const loadCurrentConfig = (): Promise<ToolSpanConfig> => loadConfig(options.configPath);
 
   const loadSetupService = async (): Promise<DesktopSetupService> => {
     if (setupService !== undefined) return setupService;
     const config = await loadCurrentConfig();
-    setupService = createProductionDesktopSetupService(path.join(config.stateDirectory, "setup"));
+    setupService = createProductionDesktopSetupService(
+      path.join(config.stateDirectory, "setup"),
+      options.configPath,
+    );
     return setupService;
   };
 
   const snapshot = async (): Promise<RuntimeSnapshot> => {
-    let config = active?.config;
-    if (config === undefined) {
-      try {
-        config = await loadConfig(options.configPath);
-      } catch {
-        config = undefined;
-      }
+    let config: ToolSpanConfig | undefined;
+    try {
+      config = await loadCurrentConfig();
+    } catch {
+      config = undefined;
     }
     const [jobs, artifacts] = active === undefined
       ? [[], []]
@@ -384,7 +403,7 @@ export function createDesktopProductionService(
       phase = "listen";
       const server = runtime.app.listen(config.port, config.host);
       await once(server, "listening");
-      active = { config, runtime, server };
+      active = { runtime, server };
       state = "running";
       appendLog("Runtime started");
       const result = await snapshot();
@@ -418,6 +437,16 @@ export function createDesktopProductionService(
     const result = await snapshot();
     emit({ event: "runtime.snapshot", data: result });
     return result;
+  };
+
+  const restart = async (): Promise<RuntimeSnapshot> => {
+    await stop();
+    return start();
+  };
+
+  const reloadActiveRuntime = async (): Promise<void> => {
+    if (active === undefined) return;
+    await restart();
   };
 
   const testConnection = async (target: "local" | "public"): Promise<ConnectionTestResult> => {
@@ -525,12 +554,11 @@ export function createDesktopProductionService(
         case "runtime.getSnapshot":
           return snapshot();
         case "runtime.start":
-          return start();
+          return runSerialized(start);
         case "runtime.stop":
-          return stop();
+          return runSerialized(stop);
         case "runtime.restart":
-          await stop();
-          return start();
+          return runSerialized(restart);
         case "runtime.validateConfig":
           try {
             return { valid: true, summary: summarizeConfig(await loadConfig(options.configPath)) };
@@ -609,7 +637,16 @@ export function createDesktopProductionService(
         case "setup.rollback":
         case "setup.reconcile":
         case "setup.discardCredential":
-          return (await loadSetupService()).invoke(method, params);
+          {
+            const result = await (await loadSetupService()).invoke(method, params);
+            if (
+              options.setupService === undefined
+              && isSuccessfulSetupMutation(method, result)
+            ) {
+              await runSerialized(reloadActiveRuntime);
+            }
+            return result;
+          }
       }
     },
     subscribeEvents(listener) {
@@ -617,7 +654,7 @@ export function createDesktopProductionService(
       return () => listeners.delete(listener);
     },
     async close(): Promise<void> {
-      await stop();
+      await runSerialized(stop);
       await flushLogs();
       listeners.clear();
     },

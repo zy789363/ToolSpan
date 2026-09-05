@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -22,6 +22,42 @@ afterEach(async () => {
 });
 
 describe("artifact service", () => {
+  it("does not traverse a workspace junction while creating a snapshot", async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), "toolspan-artifacts-reparse-"));
+    temporaryDirectories.push(fixtureRoot);
+    const allowedRoot = path.join(fixtureRoot, "projects");
+    const project = path.join(allowedRoot, "demo");
+    const outside = path.join(fixtureRoot, "outside");
+    const databasePath = path.join(fixtureRoot, "state.sqlite");
+    await mkdir(project, { recursive: true });
+    await mkdir(outside);
+    await writeFile(path.join(outside, "secret.txt"), "secret", "utf8");
+    await symlink(outside, path.join(project, "escape"), "junction");
+    const workspaces = await createWorkspaceService({ allowedRoots: [allowedRoot], databasePath });
+    const artifactsDirectory = path.join(fixtureRoot, "artifacts");
+    const artifacts = await createArtifactService({
+      workspaces,
+      databasePath,
+      artifactsDirectory,
+      publicBaseUrl: "https://mcp.example.test",
+      previewSecret: Buffer.alloc(32, 7),
+    });
+
+    try {
+      const workspace = await workspaces.openWorkspace(project);
+      const captured = await artifacts.startCapture({
+        workspaceId: workspace.id,
+        profile: "workspace_snapshot",
+      });
+      const snapshot = await readFile(path.join(artifactsDirectory, captured.id, "workspace-snapshot.json"), "utf8");
+      expect(snapshot).not.toContain("secret.txt");
+      expect(snapshot).not.toContain("secret");
+    } finally {
+      artifacts.close();
+      workspaces.close();
+    }
+  });
+
   it("captures and inspects a persisted workspace snapshot", async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), "toolspan-artifacts-"));
     temporaryDirectories.push(fixtureRoot);

@@ -27,6 +27,8 @@ export interface CloudflaredInstallResult extends CloudflaredStatus {
 }
 
 export interface CloudflaredAdapter {
+  /** Manual adapters must stop before remote mutation; they cannot claim an automatic Apply. */
+  readonly automationMode?: "automatic" | "manual";
   inspect(): Promise<CloudflaredStatus>;
   install(input: CloudflaredInstallInput): Promise<CloudflaredInstallResult>;
   uninstallOwnedService(input: { sessionId: string; serviceId: string; expectedFingerprint: string }): Promise<{ removed: boolean }>;
@@ -44,6 +46,7 @@ export class CloudflaredManualCheckpointError extends Error {
 
 export function createManualCloudflaredAdapter(): CloudflaredAdapter {
   return {
+    automationMode: "manual",
     async inspect() {
       return { installed: false, serviceInstalled: false };
     },

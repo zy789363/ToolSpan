@@ -15,8 +15,26 @@ export interface HttpAppOptions {
 }
 
 function hostnameFromHeader(value: string): string | undefined {
+  if (
+    value.length === 0
+    || value.includes("@")
+    || value.endsWith(":")
+    || /[\u0000-\u0020\u007f\\/?#]/u.test(value)
+  ) {
+    return undefined;
+  }
   try {
-    return new URL(`http://${value}`).hostname.toLowerCase();
+    const url = new URL(`http://${value}`);
+    if (
+      url.username !== ""
+      || url.password !== ""
+      || url.pathname !== "/"
+      || url.search !== ""
+      || url.hash !== ""
+    ) {
+      return undefined;
+    }
+    return url.hostname.toLowerCase();
   } catch {
     return undefined;
   }

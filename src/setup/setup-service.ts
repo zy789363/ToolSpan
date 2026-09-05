@@ -31,6 +31,7 @@ import {
   type SetupPlanAction,
   type SetupReceipt,
   type SetupReceiptResource,
+  type SetupResourceKind,
   type SetupRollbackResource,
   type SetupSessionRecord,
   type SetupSnapshot,
@@ -45,6 +46,10 @@ export interface SetupServiceOptions {
   directory: string;
   cloudflare: CloudflareAdapter;
   cloudflared: CloudflaredAdapter;
+  /** Applies the manifest's public URL origin to the Core config atomically. */
+  writePublicMcpOrigin: (origin: string) => Promise<void>;
+  /** Reads the currently configured Core public URL for reconciliation/rollback. */
+  readPublicMcpOrigin?: () => Promise<string>;
   now?: () => Date;
   pid?: number;
   processInspector?: ProcessInspector;
@@ -310,6 +315,17 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
         ownedByToolSpan: record.ownedByToolSpan === true || ownedResourceIds.dns.has(record.id),
       }));
       const serviceStatus = await options.cloudflared.inspect();
+      if (options.cloudflared.automationMode === "manual" && !serviceStatus.serviceInstalled) {
+        const blocker: SetupBlocker = {
+          code: "MANUAL_OR_UAC_REQUIRED",
+          message: "Scoped Apply is unavailable until a manual or UAC-approved cloudflared service is ready; use Guided manual setup.",
+        };
+        await persistBlocker(store, record, blocker, timestamp(), secrets);
+        throw new SetupError(blocker);
+      }
+      const configuredPublicOrigin = options.readPublicMcpOrigin === undefined
+        ? undefined
+        : await options.readPublicMcpOrigin();
       const plannedAt = timestamp();
       let plan: SetupPlan;
       try {
@@ -322,6 +338,7 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
           tunnels: tunnelsWithOwnership,
           dnsRecords: dnsWithOwnership,
           serviceStatus,
+          configuredPublicOrigin,
           plannedAt,
           sessionId,
         });
@@ -411,22 +428,32 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
           credential,
           secrets,
           receipt,
+          writePublicMcpOrigin: options.writePublicMcpOrigin,
+          readPublicMcpOrigin: options.readPublicMcpOrigin,
           at: timestamp,
         };
 
         applyAccountAndZoneMarkers(ctx);
+        if (options.cloudflared.automationMode === "manual") {
+          const serviceStatus = await options.cloudflared.inspect();
+          if (!serviceStatus.serviceInstalled) {
+            throw new SetupError({
+              code: "MANUAL_OR_UAC_REQUIRED",
+              message: "Scoped Apply is blocked until a manual or UAC-approved cloudflared service is available",
+            });
+          }
+        }
         const { tunnel, ownedBySession: tunnelOwnedBySession } = await applyTunnel(ctx);
         const { previousTunnelConfig } = await applyTunnelConfig(ctx, tunnel, tunnelOwnedBySession);
         const { dns, previousDnsRecord } = await applyDns(ctx, tunnel);
         const { serviceId, serviceFingerprint, ownedBySession: serviceOwnedBySession } = await applyCloudflared(ctx, tunnel);
-        applyToolspanConfigMarker(ctx);
-
         const verifyingAt = timestamp();
         await writeTransition(record, "VERIFYING", verifyingAt, secrets);
         const { tunnelHealth, serviceHealth } = await verifyAppliedResources(ctx, tunnel, serviceId);
         if (!tunnelHealth.healthy || !serviceHealth.healthy) {
           throw new Error("Setup verification failed");
         }
+        await applyToolspanConfig(ctx);
         const completedAt = timestamp();
         receipt.completedAt = completedAt;
         await store.writeReceipt(receipt, secrets);
@@ -437,11 +464,14 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
       } catch (error) {
         const failedAt = timestamp();
         const safeMessage = redactText(error instanceof Error ? error.message : "Setup Apply failed", secrets);
+        const errorCode = (error as { code?: unknown }).code;
         const publicError = error instanceof SetupError
           ? new SetupError({ ...error.blocker, message: safeMessage })
           : new SetupError({
-              code: (error as { code?: unknown }).code === "MANUAL_OR_UAC_REQUIRED"
+              code: errorCode === "MANUAL_OR_UAC_REQUIRED"
                 ? "MANUAL_OR_UAC_REQUIRED"
+                : errorCode === "FINGERPRINT_MISMATCH"
+                  ? "FINGERPRINT_MISMATCH"
                 : "APPLY_FAILED",
               message: safeMessage,
             });
@@ -506,7 +536,11 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
         await writeTransition(record, "ROLLING_BACK", rollingAt, secrets);
         const journal = await store.readJournal(input.sessionId);
         if (journal === undefined) throw new Error("Setup journal is unavailable");
-        const rollbackResults: SetupReceipt["rollback"]["resources"] = [];
+        validateReceiptJournalBinding(receipt, journal, record.plan, input.sessionId);
+        const rollbackResults = [...receipt.rollback.resources];
+        const rollbackByKey = new Map(
+          rollbackResults.map((result) => [rollbackResourceKey(result.kind, result.resourceId), result]),
+        );
         const ctx: RollbackResourceContext = {
           store,
           cloudflare: options.cloudflare,
@@ -515,6 +549,8 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
           manifest,
           credential,
           secrets,
+          writePublicMcpOrigin: options.writePublicMcpOrigin,
+          readPublicMcpOrigin: options.readPublicMcpOrigin,
           accountId: record.plan.account.id,
           zoneId: record.plan.zone.id,
           journal,
@@ -525,6 +561,8 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
           if (resource.classification === "untouched" || resource.classification === "reused") {
             continue;
           }
+          const previousResult = rollbackByKey.get(rollbackResourceKey(resource.kind, resource.resourceId));
+          if (previousResult !== undefined && previousResult.outcome !== "failed") continue;
           let result: SetupRollbackResource | undefined;
           try {
             result = await rollbackResource(ctx, resource);
@@ -537,9 +575,10 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
             };
           }
           if (result === undefined) continue;
-          rollbackResults.push(result);
+          rollbackByKey.set(rollbackResourceKey(result.kind, result.resourceId), result);
+          const persistedResults = [...rollbackByKey.values()];
           // Persist incremental progress so a crash mid-rollback can be resumed.
-          receipt.rollback = { status: "partial", resources: [...rollbackResults] };
+          receipt.rollback = { status: "partial", resources: persistedResults };
           await store.writeReceipt(receipt, secrets);
           await store.appendJournal(input.sessionId, {
             at: timestamp(),
@@ -547,8 +586,9 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
             detail: `${result.kind}:${result.resourceId}:${result.outcome}:${result.reason}`,
           }, secrets);
         }
-        const partial = rollbackResults.some((result) => result.outcome === "failed");
-        receipt.rollback = { status: partial ? "partial" : "full", resources: rollbackResults };
+        const finalRollbackResults = [...rollbackByKey.values()];
+        const partial = finalRollbackResults.some((result) => result.outcome === "failed");
+        receipt.rollback = { status: partial ? "partial" : "full", resources: finalRollbackResults };
         receipt.completedAt = timestamp();
         await store.writeReceipt(receipt, secrets);
         const terminal = partial ? "ROLLBACK_PARTIAL" : "ROLLED_BACK";
@@ -570,18 +610,27 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
     async reconcile(input) {
       await initialize();
       const record = await requireSession(store, input.sessionId);
-      if (input.credential === undefined) {
-        if (record.status === "COMPLETE" || record.status === "ROLLED_BACK") {
-          return snapshotOrThrow(input.sessionId);
-        }
-        await requireCredentialReentry(store, record, timestamp(), "Reconciliation requires a fresh Cloudflare credential");
+      if (
+        input.credential === undefined
+        && (record.status === "COMPLETE" || record.status === "ROLLED_BACK")
+      ) {
         return snapshotOrThrow(input.sessionId);
       }
-      const credential = input.credential;
-      validateCredential(credential);
-      const secrets = credentialSecrets(credential);
-      credentialCache.set(input.sessionId, credential);
+      // SetupStore currently persists only APPLYING/ROLLING_BACK lock markers. Reconcile
+      // uses the APPLYING marker for compatibility, but shares the exact same lock file.
+      await recoverVerifiedStaleLock(store, processInspector, timestamp());
+      await acquireMutationLock(input.sessionId, "APPLYING");
+      let lockHeld = true;
       try {
+        if (input.credential === undefined) {
+          await requireCredentialReentry(store, record, timestamp(), "Reconciliation requires a fresh Cloudflare credential");
+          return snapshotOrThrow(input.sessionId);
+        }
+        const credential = input.credential;
+        validateCredential(credential);
+        const secrets = credentialSecrets(credential);
+        credentialCache.set(input.sessionId, credential);
+        try {
         await options.cloudflare.verifyCredential({ credential });
         const receipt = await store.readReceipt(input.sessionId);
         if (record.status === "NEEDS_CREDENTIAL_REENTRY" && receipt === undefined) {
@@ -601,9 +650,33 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
           await requireCredentialReentry(store, record, timestamp(), "No Apply journal is available to reconcile");
           return snapshotOrThrow(input.sessionId);
         }
+        const journal = await store.readJournal(input.sessionId);
+        if (journal === undefined) {
+          await persistReconciliationRequired(
+            store,
+            record,
+            timestamp(),
+            "Setup journal is unavailable; remote resources were not inspected",
+            secrets,
+          );
+          return snapshotOrThrow(input.sessionId);
+        }
+        try {
+          validateReceiptJournalBinding(receipt, journal, record.plan, input.sessionId);
+        } catch (error) {
+          await persistReconciliationRequired(
+            store,
+            record,
+            timestamp(),
+            error instanceof Error ? error.message : "Setup receipt binding is invalid",
+            secrets,
+          );
+          return snapshotOrThrow(input.sessionId);
+        }
         if (record.status === "NEEDS_CREDENTIAL_REENTRY") {
           transitionRecord(record, "NEEDS_RECONCILIATION", timestamp());
         }
+        const manifest = await requireManifest(store, input.sessionId);
         const { tunnel, dns, service, resourcesMatch } = await inspectRemoteResources({
           store,
           cloudflare: options.cloudflare,
@@ -625,6 +698,55 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
             { check: "cloudflared", passed: serviceHealth.healthy, checkedAt: serviceHealth.checkedAt },
           ];
           if (tunnelHealth.healthy && serviceHealth.healthy) {
+            const desiredOrigin = new URL(manifest.publicMcpUrl).origin;
+            const configReceipt = receipt.resources.find((resource) => resource.kind === "toolspan_config");
+            if (options.readPublicMcpOrigin !== undefined) {
+              const currentOrigin = await options.readPublicMcpOrigin();
+              if (currentOrigin !== desiredOrigin) {
+                if (configReceipt !== undefined) {
+                  await persistReconciliationRequired(
+                    store,
+                    record,
+                    timestamp(),
+                    "Core publicBaseUrl changed after Apply; no local config write was attempted",
+                    secrets,
+                  );
+                  return snapshotOrThrow(input.sessionId);
+                }
+                await applyToolspanConfig({
+                  store,
+                  cloudflare: options.cloudflare,
+                  cloudflared: options.cloudflared,
+                  sessionId: input.sessionId,
+                  record,
+                  manifest,
+                  plan: record.plan,
+                  credential,
+                  secrets,
+                  receipt,
+                  writePublicMcpOrigin: options.writePublicMcpOrigin,
+                  readPublicMcpOrigin: options.readPublicMcpOrigin,
+                  at: timestamp,
+                });
+                await store.writeReceipt(receipt, secrets);
+              }
+            } else if (configReceipt === undefined) {
+              await applyToolspanConfig({
+                store,
+                cloudflare: options.cloudflare,
+                cloudflared: options.cloudflared,
+                sessionId: input.sessionId,
+                record,
+                manifest,
+                plan: record.plan,
+                credential,
+                secrets,
+                receipt,
+                writePublicMcpOrigin: options.writePublicMcpOrigin,
+                at: timestamp,
+              });
+              await store.writeReceipt(receipt, secrets);
+            }
             const from = record.status;
             if (from !== "VERIFYING") transitionRecord(record, "VERIFYING", timestamp());
             transitionRecord(record, "COMPLETE", timestamp());
@@ -658,9 +780,15 @@ export function createSetupService(options: SetupServiceOptions): SetupService {
           detail: record.blocker.message,
         }, secrets);
         return snapshotOrThrow(input.sessionId);
+        } finally {
+          if ((await store.readSession(input.sessionId))?.status !== "PREFLIGHT") {
+            credentialCache.delete(input.sessionId);
+          }
+        }
       } finally {
-        if ((await store.readSession(input.sessionId))?.status !== "PREFLIGHT") {
-          credentialCache.delete(input.sessionId);
+        if (lockHeld) {
+          await releaseLockSafely(input.sessionId);
+          lockHeld = false;
         }
       }
     },
@@ -700,6 +828,8 @@ interface ApplyContext {
   credential: CloudflareCredential;
   secrets: readonly string[];
   receipt: SetupReceipt;
+  writePublicMcpOrigin: (origin: string) => Promise<void>;
+  readPublicMcpOrigin?: () => Promise<string>;
   /** Returns a fresh timestamp (keeps journal timestamps distinct per write). */
   at: () => string;
 }
@@ -936,9 +1066,43 @@ async function applyCloudflared(
 }
 
 /** Marks the desktop-side publicBaseUrl update in the receipt (applied atomically by the host). */
-function applyToolspanConfigMarker(ctx: ApplyContext): void {
+async function applyToolspanConfig(ctx: ApplyContext): Promise<void> {
   const action = requireAction(ctx.plan, "toolspan_config");
-  ctx.receipt.resources.push(toReceiptResource(action, "publicBaseUrl", false, action.desiredFingerprint));
+  const desiredOrigin = new URL(ctx.manifest.publicMcpUrl).origin;
+  const currentOrigin = ctx.readPublicMcpOrigin === undefined
+    ? undefined
+    : await ctx.readPublicMcpOrigin();
+  if (
+    action.beforeFingerprint !== undefined
+    && (currentOrigin === undefined || fingerprint(currentOrigin) !== action.beforeFingerprint)
+  ) {
+    failReconciliation("Core publicBaseUrl changed after Dry Run");
+  }
+  if (currentOrigin !== desiredOrigin) {
+    await ctx.writePublicMcpOrigin(desiredOrigin);
+  }
+  const configReceipt = toReceiptResource(
+    action,
+    "publicBaseUrl",
+    action.classification === "updated",
+    fingerprint(desiredOrigin),
+  );
+  ctx.receipt.resources.push(configReceipt);
+  if (action.classification === "updated" && currentOrigin !== undefined) {
+    await appendApplyResource(
+      ctx.store,
+      ctx.sessionId,
+      configReceipt,
+      ctx.at(),
+      ctx.secrets,
+      {
+        kind: "toolspan_config",
+        resourceId: "publicBaseUrl",
+        previousPublicBaseUrl: currentOrigin,
+        appliedFingerprint: configReceipt.afterFingerprint!,
+      },
+    );
+  }
 }
 
 /** Checks tunnel + service health and records verification evidence in the receipt. */
@@ -981,6 +1145,8 @@ interface RollbackResourceContext {
   manifest: SetupManifest;
   credential: CloudflareCredential;
   secrets: readonly string[];
+  writePublicMcpOrigin: (origin: string) => Promise<void>;
+  readPublicMcpOrigin?: () => Promise<string>;
   accountId: string;
   zoneId: string;
   journal: SetupJournal;
@@ -997,7 +1163,33 @@ async function rollbackResource(
   ctx: RollbackResourceContext,
   resource: SetupReceiptResource,
 ): Promise<SetupRollbackResource | undefined> {
-  const { store, cloudflare, cloudflared, sessionId, manifest, credential, accountId, zoneId, journal } = ctx;
+  const {
+    store,
+    cloudflare,
+    cloudflared,
+    sessionId,
+    manifest,
+    credential,
+    accountId,
+    zoneId,
+    journal,
+    writePublicMcpOrigin,
+    readPublicMcpOrigin,
+  } = ctx;
+
+  if (resource.kind === "toolspan_config" && resource.classification === "updated") {
+    if (resource.afterFingerprint === undefined || readPublicMcpOrigin === undefined) {
+      throw new Error("Core publicBaseUrl rollback proof is unavailable");
+    }
+    const current = await readPublicMcpOrigin();
+    if (fingerprint(current) !== resource.afterFingerprint) {
+      throw new Error("Core publicBaseUrl changed after Apply");
+    }
+    const previous = findRollbackData(journal, "toolspan_config", resource.resourceId)?.previousPublicBaseUrl;
+    if (previous === undefined) throw new Error("Core publicBaseUrl restore data is unavailable");
+    await writePublicMcpOrigin(previous);
+    return { kind: resource.kind, resourceId: resource.resourceId, outcome: "restored", reason: "Core publicBaseUrl restored" };
+  }
 
   if (resource.kind === "cloudflared" && resource.classification === "created") {
     if (!resource.ownedBySession || resource.afterFingerprint === undefined) {
@@ -1099,12 +1291,66 @@ async function rollbackResource(
 /** Finds the most recent rollback journal data recorded for a given resource. */
 function findRollbackData(
   journal: SetupJournal,
-  kind: "dns" | "tunnel_config",
+  kind: "dns" | "tunnel_config" | "toolspan_config",
   resourceId: string,
 ): SetupJournalEntry["rollbackData"] {
   return [...journal.entries].reverse().find(
     (entry) => entry.rollbackData?.kind === kind && entry.rollbackData.resourceId === resourceId,
   )?.rollbackData;
+}
+
+function rollbackResourceKey(kind: SetupResourceKind, resourceId: string): string {
+  return `${kind}:${resourceId}`;
+}
+
+/** Refuses recovery when the persisted receipt and journal no longer describe the same Apply. */
+function validateReceiptJournalBinding(
+  receipt: SetupReceipt,
+  journal: SetupJournal,
+  plan: SetupPlan,
+  sessionId: string,
+): void {
+  if (
+    receipt.sessionId !== sessionId
+    || journal.sessionId !== sessionId
+    || receipt.idempotencyKey !== journal.idempotencyKey
+  ) {
+    throw new SetupError({
+      code: "RECONCILIATION_REQUIRED",
+      message: "Setup receipt and journal are not bound to the requested session",
+    });
+  }
+  const applied = journal.entries
+    .filter((entry) => entry.event === "APPLY_ACTION" && entry.resource !== undefined)
+    .map((entry) => entry.resource!);
+  for (const resource of receipt.resources) {
+    const action = plan.actions.find((candidate) => candidate.kind === resource.kind);
+    if (
+      action === undefined
+      || resource.name !== action.name
+      || resource.desiredFingerprint !== action.desiredFingerprint
+      || (action.resourceId !== undefined && resource.resourceId !== action.resourceId)
+    ) {
+      throw new SetupError({
+        code: "RECONCILIATION_REQUIRED",
+        message: `Setup receipt resource binding is invalid for ${resource.kind}`,
+      });
+    }
+    if (["tunnel", "tunnel_config", "dns", "cloudflared"].includes(resource.kind)) {
+      const journalResource = applied.find((candidate) =>
+        candidate.kind === resource.kind
+        && candidate.resourceId === resource.resourceId
+        && candidate.afterFingerprint === resource.afterFingerprint
+        && candidate.ownedBySession === resource.ownedBySession,
+      );
+      if (journalResource === undefined) {
+        throw new SetupError({
+          code: "RECONCILIATION_REQUIRED",
+          message: `Setup journal binding is missing for ${resource.kind}`,
+        });
+      }
+    }
+  }
 }
 
 // =============================================================================
@@ -1129,12 +1375,22 @@ async function inspectRemoteResources(ctx: ReconcileContext): Promise<{
   resourcesMatch: boolean;
 }> {
   const { store, cloudflare, cloudflared, sessionId, credential, plan, receipt } = ctx;
+  const manifest = await requireManifest(store, sessionId);
   const tunnelReceipt = receipt.resources.find((resource) => resource.kind === "tunnel");
   const dnsReceipt = receipt.resources.find((resource) => resource.kind === "dns");
   const serviceReceipt = receipt.resources.find((resource) => resource.kind === "cloudflared");
+  const tunnelConfigReceipt = receipt.resources.find((resource) => resource.kind === "tunnel_config");
+  if (
+    tunnelReceipt === undefined
+    || dnsReceipt === undefined
+    || serviceReceipt === undefined
+    || tunnelConfigReceipt === undefined
+  ) {
+    return { tunnel: undefined, dns: undefined, service: await cloudflared.inspect(), resourcesMatch: false };
+  }
   const tunnels = await listTunnels(cloudflare, credential, plan.account.id, requireAction(plan, "tunnel").name);
   const tunnel = tunnels.find((candidate) => candidate.id === tunnelReceipt?.resourceId);
-  const desiredConfig = desiredTunnelConfig(await requireManifest(store, sessionId));
+  const desiredConfig = desiredTunnelConfig(manifest);
   const currentConfig = tunnel === undefined
     ? undefined
     : await cloudflare.readTunnelConfig({ credential, accountId: plan.account.id, tunnelId: tunnel.id });
@@ -1143,13 +1399,25 @@ async function inspectRemoteResources(ctx: ReconcileContext): Promise<{
   const service = await cloudflared.inspect();
   const resourcesMatch =
     tunnel !== undefined &&
+    tunnel.accountId === plan.account.id &&
+    tunnel.name === requireAction(plan, "tunnel").name &&
+    tunnelFingerprint(tunnel) === tunnelReceipt.afterFingerprint &&
+    (!tunnelReceipt.ownedBySession || tunnel.ownedByToolSpan !== false) &&
     currentConfig !== undefined &&
     fingerprint(currentConfig) === fingerprint(desiredConfig) &&
+    fingerprint(currentConfig) === tunnelConfigReceipt.afterFingerprint &&
+    tunnelConfigReceipt.resourceId === tunnel.id &&
     dns !== undefined &&
+    dns.zoneId === plan.zone.id &&
+    dns.name === requireAction(plan, "dns").name &&
+    fingerprint(stripDnsIdentity(dns)) === dnsReceipt.afterFingerprint &&
+    (!dnsReceipt.ownedBySession || dns.ownedByToolSpan !== false) &&
     dns.content === `${tunnel.id}.cfargotunnel.com` &&
     dns.proxied === true &&
     service.serviceInstalled &&
-    service.serviceId === serviceReceipt?.resourceId;
+    service.serviceId === serviceReceipt.resourceId &&
+    service.serviceFingerprint === serviceReceipt.afterFingerprint &&
+    (!serviceReceipt.ownedBySession || (service.ownedBySession === true && service.ownerSessionId === sessionId));
   return { tunnel, dns, service, resourcesMatch };
 }
 
@@ -1166,6 +1434,7 @@ async function buildPlan(input: {
   tunnels: CloudflareTunnel[];
   dnsRecords: CloudflareDnsRecord[];
   serviceStatus: Awaited<ReturnType<CloudflaredAdapter["inspect"]>>;
+  configuredPublicOrigin?: string;
   plannedAt: string;
   sessionId: string;
 }): Promise<SetupPlan> {
@@ -1181,6 +1450,7 @@ async function buildPlan(input: {
   }
   const desiredConfig = desiredTunnelConfig(input.manifest);
   const desiredConfigFingerprint = fingerprint(desiredConfig);
+  const desiredPublicOrigin = new URL(input.manifest.publicMcpUrl).origin;
   const currentConfig = tunnel === undefined
     ? undefined
     : await input.adapter.readTunnelConfig({
@@ -1260,9 +1530,15 @@ async function buildPlan(input: {
     },
     {
       kind: "toolspan_config",
-      classification: "untouched",
+      classification: input.configuredPublicOrigin === undefined || input.configuredPublicOrigin === desiredPublicOrigin
+        ? "untouched"
+        : "updated",
+      resourceId: "publicBaseUrl",
+      ...(input.configuredPublicOrigin === undefined
+        ? {}
+        : { beforeFingerprint: fingerprint(input.configuredPublicOrigin) }),
       name: "publicBaseUrl",
-      desiredFingerprint: fingerprint(input.manifest.publicMcpUrl),
+      desiredFingerprint: fingerprint(desiredPublicOrigin),
       reason: "The Desktop host applies publicBaseUrl atomically after the domain transaction",
     },
   ];
@@ -1524,6 +1800,27 @@ async function persistBlocker(
   record.blocker = blocker;
   record.updatedAt = at;
   await store.writeSession(record, secrets);
+}
+
+async function persistReconciliationRequired(
+  store: SetupStore,
+  record: SetupSessionRecord,
+  at: string,
+  message: string,
+  secrets: readonly string[],
+): Promise<void> {
+  const from = record.status;
+  if (from !== "NEEDS_RECONCILIATION") transitionRecord(record, "NEEDS_RECONCILIATION", at);
+  record.requiresCredential = true;
+  record.blocker = { code: "RECONCILIATION_REQUIRED", message };
+  await store.writeSession(record, secrets);
+  await store.appendJournal(record.sessionId, {
+    at,
+    event: "RECONCILED",
+    from,
+    to: "NEEDS_RECONCILIATION",
+    detail: message,
+  }, secrets);
 }
 
 async function locallyOwnedResourceIds(

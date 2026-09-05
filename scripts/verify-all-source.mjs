@@ -14,6 +14,49 @@ export const REQUIRED_SOURCE_SCRIPTS = [
   "verify:setup",
 ];
 
+// 这些测试只调用本地实现、固定 fixture 或 mock；不得把需要凭据、远程账户
+// 或人工授权的 e2e:* 命令加入这里。
+export const DETERMINISTIC_SOURCE_TEST_FILES = Object.freeze([
+  "scripts/tests/cloudflare-e2e.test.mjs",
+  "scripts/tests/cloudflare-public-e2e.test.mjs",
+  "scripts/tests/cloudflared-service-lifecycle.test.mjs",
+  "scripts/tests/codex-remote-e2e.test.mjs",
+  "scripts/tests/desktop-verification.test.mjs",
+  "scripts/tests/goal-scripts.test.mjs",
+  "scripts/tests/host-e2e-safety.test.mjs",
+  "scripts/tests/package-runtime-policy.test.mjs",
+  "scripts/tests/release-scripts.test.mjs",
+  "scripts/tests/setup-verification.test.mjs",
+  "scripts/tests/source-verification.test.mjs",
+]);
+
+export const EXTERNAL_E2E_GATES = Object.freeze([
+  Object.freeze({
+    id: "E-CF-TOKEN-01",
+    script: "e2e:cloudflare",
+    status: "EXTERNAL_GATE_PENDING",
+    reason: "requires an external Cloudflare account and credential",
+  }),
+  Object.freeze({
+    id: "E-CF-WIN-01",
+    script: "e2e:cloudflare-public",
+    status: "EXTERNAL_GATE_PENDING",
+    reason: "requires an external Cloudflare account and Windows service environment",
+  }),
+  Object.freeze({
+    id: "E-HOST-01",
+    script: "e2e:mcp-inspector",
+    status: "EXTERNAL_GATE_PENDING",
+    reason: "requires an external Host authorization and human checkpoint",
+  }),
+  Object.freeze({
+    id: "E-CODEX-01",
+    script: "e2e:codex-remote",
+    status: "EXTERNAL_GATE_PENDING",
+    reason: "requires an external Codex account and remote endpoint",
+  }),
+]);
+
 const PLACEHOLDER = /(?:\.\.\.|\b(?:TODO|TBD|FIXME|placeholder|not implemented)\b)/iu;
 const SHELL_META = /(?:&&|\|\||[<>]|\$\(|`)/u;
 
@@ -40,11 +83,20 @@ export function validateAllSourcePackageScripts(packageDocument) {
 
 export function allSourceStepNames() {
   return [
+    "DETERMINISTIC_SOURCE_SCRIPT_TESTS",
     "GOAL_CHECK",
     "CORE_SOURCE",
     "DESKTOP_SOURCE",
     "SETUP_SOURCE",
   ];
+}
+
+export function deterministicSourceTestArguments() {
+  return ["--test", ...DETERMINISTIC_SOURCE_TEST_FILES];
+}
+
+export function externalSourceGateSummary() {
+  return EXTERNAL_E2E_GATES.map((gate) => ({ ...gate }));
 }
 
 async function runRootScript(npmCli, script, label, environment) {
@@ -53,7 +105,12 @@ async function runRootScript(npmCli, script, label, environment) {
 
 export async function verifyAllSource(options = {}) {
   if (!isSupportedDesktopNodeVersion(options.nodeVersion ?? process.versions.node)) {
-    return { status: "BLOCKED_BY_ENVIRONMENT", reason: "NODE_VERSION_MUST_MATCH_22_17_OR_24", exitCode: 2 };
+    return {
+      status: "BLOCKED_BY_ENVIRONMENT",
+      reason: "NODE_VERSION_MUST_MATCH_22_17_OR_24",
+      externalGates: externalSourceGateSummary(),
+      exitCode: 2,
+    };
   }
   const packageDocument = options.packageDocument
     ?? JSON.parse(await readFile(path.join(projectRoot, "package.json"), "utf8"));
@@ -64,23 +121,26 @@ export async function verifyAllSource(options = {}) {
       classification: "REGRESSION",
       reason: "SOURCE_PACKAGE_SCRIPTS_INVALID",
       details: scriptErrors,
+      externalGates: externalSourceGateSummary(),
       exitCode: 1,
     };
   }
 
   const environment = verificationEnvironment(options.environment ?? process.env);
   const npmCli = options.npmCli ?? await resolveNpmCli(environment);
-  if (npmCli === null) return { status: "BLOCKED_BY_ENVIRONMENT", reason: "NPM_CLI_NOT_FOUND", exitCode: 2 };
+  if (npmCli === null) {
+    return {
+      status: "BLOCKED_BY_ENVIRONMENT",
+      reason: "NPM_CLI_NOT_FOUND",
+      externalGates: externalSourceGateSummary(),
+      exitCode: 2,
+    };
+  }
   const runRoot = options.runRoot ?? ((script, label) => runRootScript(npmCli, script, label, environment));
   const runUnitTests = options.runUnitTests ?? (() => requireSuccessfulProcess(
-    "Release orchestration script unit tests",
+    "Deterministic source helper script tests",
     process.execPath,
-    [
-      "--test",
-      "scripts/tests/release-scripts.test.mjs",
-      "scripts/tests/package-runtime-policy.test.mjs",
-      "scripts/tests/cloudflared-service-lifecycle.test.mjs",
-    ],
+    deterministicSourceTestArguments(),
     { environment },
   ));
 
@@ -98,6 +158,8 @@ export async function verifyAllSource(options = {}) {
         "SETUP_IMPLEMENTATION_COMPLETE",
       ],
       checks: allSourceStepNames(),
+      deterministicSourceTests: [...DETERMINISTIC_SOURCE_TEST_FILES],
+      externalGates: externalSourceGateSummary(),
       shell: false,
       externalGatesPromotedToPass: 0,
       exitCode: 0,
@@ -108,6 +170,7 @@ export async function verifyAllSource(options = {}) {
         status: "BLOCKED_BY_ENVIRONMENT",
         reason: error?.exitCode === 2 ? "SOURCE_VERIFICATION_ENVIRONMENT_BLOCKED" : error.code,
         failedStep: error instanceof Error ? error.message : "unknown step",
+        externalGates: externalSourceGateSummary(),
         exitCode: 2,
       };
     }
@@ -116,6 +179,7 @@ export async function verifyAllSource(options = {}) {
       classification: "REGRESSION",
       reason: "SOURCE_VERIFICATION_FAILED",
       failedStep: error instanceof Error ? error.message : "unknown step",
+      externalGates: externalSourceGateSummary(),
       exitCode: 1,
     };
   }
@@ -131,6 +195,7 @@ async function main() {
       status: "FAIL",
       classification: "REGRESSION",
       reason: "SOURCE_VERIFICATION_CRASHED",
+      externalGates: externalSourceGateSummary(),
     })}\n`);
     process.exitCode = 1;
   }

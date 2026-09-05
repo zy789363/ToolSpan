@@ -1,10 +1,21 @@
-import { lstat, mkdir, mkdtemp, readFile, rm, rmdir, symlink, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readlink,
+  readdir,
+  rm,
+  rmdir,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createFileService } from "../src/files/file-service.js";
-import { createWorkspaceService } from "../src/workspaces/workspace-service.js";
+import { createWorkspaceService, type WorkspaceService } from "../src/workspaces/workspace-service.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -143,6 +154,37 @@ describe("workspace file service", () => {
     }
   });
 
+  it("rejects an edit before reading a file larger than 1 MiB", async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), "webgpt-files-"));
+    temporaryDirectories.push(fixtureRoot);
+    const allowedRoot = path.join(fixtureRoot, "projects");
+    const project = path.join(allowedRoot, "demo");
+    await mkdir(project, { recursive: true });
+    const content = `${"x".repeat(1024 * 1024)}\nneedle\n`;
+    await writeFile(path.join(project, "large.txt"), content, "utf8");
+    const workspaces = await createWorkspaceService({
+      allowedRoots: [allowedRoot],
+      databasePath: path.join(fixtureRoot, "state.sqlite"),
+    });
+
+    try {
+      const workspace = await workspaces.openWorkspace(project);
+      const files = createFileService(workspaces, {
+        recoveryDirectory: path.join(fixtureRoot, "trash"),
+      });
+
+      await expect(files.edit({
+        workspaceId: workspace.id,
+        path: "large.txt",
+        oldText: "needle",
+        newText: "changed",
+      })).rejects.toThrow("File exceeds the 1 MiB read limit");
+      await expect(readFile(path.join(project, "large.txt"), "utf8")).resolves.toBe(content);
+    } finally {
+      workspaces.close();
+    }
+  });
+
   it("searches file content with ripgrep and returns bounded structured matches", async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), "webgpt-files-"));
     temporaryDirectories.push(fixtureRoot);
@@ -216,6 +258,38 @@ describe("workspace file service", () => {
     }
   });
 
+  it("treats a leading-dash content pattern as a regular expression", async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), "webgpt-files-"));
+    temporaryDirectories.push(fixtureRoot);
+    const allowedRoot = path.join(fixtureRoot, "projects");
+    const project = path.join(allowedRoot, "demo");
+    await mkdir(project, { recursive: true });
+    await writeFile(path.join(project, "notes.txt"), "--version is content\n", "utf8");
+    const workspaces = await createWorkspaceService({
+      allowedRoots: [allowedRoot],
+      databasePath: path.join(fixtureRoot, "state.sqlite"),
+    });
+
+    try {
+      const workspace = await workspaces.openWorkspace(project);
+      const files = createFileService(workspaces, {
+        recoveryDirectory: path.join(fixtureRoot, "trash"),
+      });
+
+      await expect(files.searchFiles({
+        workspaceId: workspace.id,
+        pattern: "--version",
+        mode: "content",
+        maxResults: 10,
+      })).resolves.toEqual({
+        matches: [{ path: "notes.txt", line: 1, column: 1, text: "--version is content" }],
+        truncated: false,
+      });
+    } finally {
+      workspaces.close();
+    }
+  });
+
   it("imports a bounded base64 asset into an existing workspace directory", async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), "webgpt-files-"));
     temporaryDirectories.push(fixtureRoot);
@@ -248,6 +322,36 @@ describe("workspace file service", () => {
       await expect(readFile(path.join(project, "assets", "pixel.bin"))).resolves.toEqual(
         Buffer.from([0, 1, 2, 255]),
       );
+    } finally {
+      workspaces.close();
+    }
+  });
+
+  it("serializes concurrent directory creation and reports only the owner as creator", async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), "webgpt-files-"));
+    temporaryDirectories.push(fixtureRoot);
+    const allowedRoot = path.join(fixtureRoot, "projects");
+    const project = path.join(allowedRoot, "demo");
+    await mkdir(project, { recursive: true });
+    const workspaces = await createWorkspaceService({
+      allowedRoots: [allowedRoot],
+      databasePath: path.join(fixtureRoot, "state.sqlite"),
+    });
+
+    try {
+      const workspace = await workspaces.openWorkspace(project);
+      const files = createFileService(workspaces, {
+        recoveryDirectory: path.join(fixtureRoot, "trash"),
+      });
+      const results = await Promise.all([
+        files.makeDirectory({ workspaceId: workspace.id, path: "new/deep" }),
+        files.makeDirectory({ workspaceId: workspace.id, path: "new/deep" }),
+      ]);
+
+      expect(results.map((result) => result.created).sort()).toEqual([false, true]);
+      await expect(lstat(path.join(project, "new", "deep"))).resolves.toMatchObject({
+        isDirectory: expect.any(Function),
+      });
     } finally {
       workspaces.close();
     }
@@ -368,6 +472,44 @@ describe("workspace file service", () => {
     }
   });
 
+  it("does not delete a destination created while a directory copy is staging", async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), "webgpt-files-"));
+    temporaryDirectories.push(fixtureRoot);
+    const allowedRoot = path.join(fixtureRoot, "projects");
+    const project = path.join(allowedRoot, "demo");
+    const source = path.join(project, "source");
+    const destination = path.join(project, "destination");
+    await mkdir(source, { recursive: true });
+    for (let index = 0; index < 200; index += 1) {
+      await writeFile(path.join(source, `file-${index}.txt`), `${index}\n`, "utf8");
+    }
+    const workspaces = await createWorkspaceService({
+      allowedRoots: [allowedRoot],
+      databasePath: path.join(fixtureRoot, "state.sqlite"),
+    });
+
+    try {
+      const workspace = await workspaces.openWorkspace(project);
+      const files = createFileService(workspaces, {
+        recoveryDirectory: path.join(fixtureRoot, "trash"),
+      });
+      const copyPromise = files.copyPath({
+        workspaceId: workspace.id,
+        source: "source",
+        destination: "destination",
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      await mkdir(destination);
+      await writeFile(path.join(destination, "concurrent.txt"), "keep me", "utf8");
+
+      await expect(copyPromise).rejects.toThrow();
+      await expect(readFile(path.join(destination, "concurrent.txt"), "utf8"))
+        .resolves.toBe("keep me");
+    } finally {
+      workspaces.close();
+    }
+  });
+
   it("recoverably deletes and restores paths and supports explicit permanent deletion", async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), "webgpt-files-"));
     temporaryDirectories.push(fixtureRoot);
@@ -468,6 +610,89 @@ describe("workspace file service", () => {
     }
   });
 
+  it("preserves a file symlink type when copying", async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), "webgpt-files-"));
+    temporaryDirectories.push(fixtureRoot);
+    const allowedRoot = path.join(fixtureRoot, "projects");
+    const project = path.join(allowedRoot, "demo");
+    await mkdir(path.join(project, "copies"), { recursive: true });
+    await writeFile(path.join(project, "target.txt"), "target", "utf8");
+    try {
+      await symlink(
+        path.join(project, "target.txt"),
+        path.join(project, "file-link"),
+        process.platform === "win32" ? "file" : undefined,
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EPERM") return;
+      throw error;
+    }
+    const workspaces = await createWorkspaceService({
+      allowedRoots: [allowedRoot],
+      databasePath: path.join(fixtureRoot, "state.sqlite"),
+    });
+
+    try {
+      const workspace = await workspaces.openWorkspace(project);
+      const files = createFileService(workspaces, {
+        recoveryDirectory: path.join(fixtureRoot, "trash"),
+      });
+      await files.copyPath({
+        workspaceId: workspace.id,
+        source: "file-link",
+        destination: "copies/file-link",
+      });
+
+      const copiedStats = await lstat(path.join(project, "copies", "file-link"));
+      expect(copiedStats.isSymbolicLink()).toBe(true);
+      await expect(readlink(path.join(project, "copies", "file-link"))).resolves.toBe(
+        await readlink(path.join(project, "file-link")),
+      );
+    } finally {
+      workspaces.close();
+    }
+  });
+
+  it("rebases relative symlink targets when copying to a different directory", async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), "webgpt-files-"));
+    temporaryDirectories.push(fixtureRoot);
+    const allowedRoot = path.join(fixtureRoot, "projects");
+    const project = path.join(allowedRoot, "demo");
+    await mkdir(path.join(project, "copies"), { recursive: true });
+    await writeFile(path.join(project, "target.txt"), "target", "utf8");
+    try {
+      await symlink(
+        "target.txt",
+        path.join(project, "relative-link"),
+        process.platform === "win32" ? "file" : undefined,
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EPERM") return;
+      throw error;
+    }
+    const workspaces = await createWorkspaceService({
+      allowedRoots: [allowedRoot],
+      databasePath: path.join(fixtureRoot, "state.sqlite"),
+    });
+
+    try {
+      const workspace = await workspaces.openWorkspace(project);
+      const files = createFileService(workspaces, {
+        recoveryDirectory: path.join(fixtureRoot, "trash"),
+      });
+      await files.copyPath({
+        workspaceId: workspace.id,
+        source: "relative-link",
+        destination: "copies/relative-link",
+      });
+
+      await expect(readFile(path.join(project, "copies", "relative-link"), "utf8"))
+        .resolves.toBe("target");
+    } finally {
+      workspaces.close();
+    }
+  });
+
   it("dry-runs and applies structured patches without partial preflight writes", async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), "webgpt-files-"));
     temporaryDirectories.push(fixtureRoot);
@@ -522,6 +747,104 @@ describe("workspace file service", () => {
         ],
       })).rejects.toThrow("found 0");
       await expect(readFile(path.join(project, "README.md"), "utf8")).resolves.toBe("MARKER: changed\n");
+    } finally {
+      workspaces.close();
+    }
+  });
+
+  it("does not roll back over an external edit made after the first patch operation", async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), "webgpt-files-"));
+    temporaryDirectories.push(fixtureRoot);
+    const allowedRoot = path.join(fixtureRoot, "projects");
+    const project = path.join(allowedRoot, "demo");
+    await mkdir(project, { recursive: true });
+    await writeFile(path.join(project, "first.txt"), "first\n", "utf8");
+    await writeFile(path.join(project, "second.txt"), "second\n", "utf8");
+    const workspaces = await createWorkspaceService({
+      allowedRoots: [allowedRoot],
+      databasePath: path.join(fixtureRoot, "state.sqlite"),
+    });
+    let externalChangeInjected = false;
+    const racingWorkspaces: WorkspaceService = {
+      openWorkspace: workspaces.openWorkspace.bind(workspaces),
+      listWorkspaces: workspaces.listWorkspaces.bind(workspaces),
+      resumeWorkspace: workspaces.resumeWorkspace.bind(workspaces),
+      resolveExistingPath: workspaces.resolveExistingPath.bind(workspaces),
+      resolveEntryPath: workspaces.resolveEntryPath.bind(workspaces),
+      resolveWorkspaceRoot: workspaces.resolveWorkspaceRoot.bind(workspaces),
+      resolvePathForCreate: workspaces.resolvePathForCreate.bind(workspaces),
+      close: workspaces.close.bind(workspaces),
+      resolvePathForWrite: async (workspaceId, relativePath) => {
+        const resolved = await workspaces.resolvePathForWrite(workspaceId, relativePath);
+        if (relativePath === "second.txt" && !externalChangeInjected) {
+          externalChangeInjected = true;
+          await writeFile(path.join(project, "first.txt"), "external\n", "utf8");
+          await writeFile(path.join(project, "second.txt"), "changed by external writer\n", "utf8");
+        }
+        return resolved;
+      },
+    };
+
+    try {
+      const workspace = await workspaces.openWorkspace(project);
+      const files = createFileService(racingWorkspaces, {
+        recoveryDirectory: path.join(fixtureRoot, "trash"),
+      });
+
+      await expect(files.applyPatch({
+        workspaceId: workspace.id,
+        operations: [
+          { op: "edit_file", path: "first.txt", oldText: "first", newText: "toolspan" },
+          { op: "edit_file", path: "second.txt", oldText: "second", newText: "toolspan" },
+        ],
+      })).rejects.toThrow(/rollback errors|Patch target changed/);
+      await expect(readFile(path.join(project, "first.txt"), "utf8")).resolves.toBe("external\n");
+      await expect(readFile(path.join(project, "second.txt"), "utf8"))
+        .resolves.toBe("changed by external writer\n");
+    } finally {
+      workspaces.close();
+    }
+  });
+
+  it("cleans a committed recovery directory when delete verification fails", async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), "webgpt-files-"));
+    temporaryDirectories.push(fixtureRoot);
+    const allowedRoot = path.join(fixtureRoot, "projects");
+    const project = path.join(allowedRoot, "demo");
+    const recoveryDirectory = path.join(fixtureRoot, "trash");
+    await mkdir(project, { recursive: true });
+    await writeFile(path.join(project, "value.txt"), "value", "utf8");
+    const workspaces = await createWorkspaceService({
+      allowedRoots: [allowedRoot],
+      databasePath: path.join(fixtureRoot, "state.sqlite"),
+    });
+    let resolveCount = 0;
+    const failingWorkspaces: WorkspaceService = {
+      openWorkspace: workspaces.openWorkspace.bind(workspaces),
+      listWorkspaces: workspaces.listWorkspaces.bind(workspaces),
+      resumeWorkspace: workspaces.resumeWorkspace.bind(workspaces),
+      resolveExistingPath: workspaces.resolveExistingPath.bind(workspaces),
+      resolvePathForWrite: workspaces.resolvePathForWrite.bind(workspaces),
+      resolvePathForCreate: workspaces.resolvePathForCreate.bind(workspaces),
+      resolveWorkspaceRoot: workspaces.resolveWorkspaceRoot.bind(workspaces),
+      close: workspaces.close.bind(workspaces),
+      resolveEntryPath: async (workspaceId, relativePath) => {
+        const resolved = await workspaces.resolveEntryPath(workspaceId, relativePath);
+        resolveCount += 1;
+        return resolveCount === 2 ? path.join(project, "different.txt") : resolved;
+      },
+    };
+
+    try {
+      const workspace = await workspaces.openWorkspace(project);
+      const files = createFileService(failingWorkspaces, { recoveryDirectory });
+
+      await expect(files.deletePath({
+        workspaceId: workspace.id,
+        path: "value.txt",
+      })).rejects.toThrow("Path changed during delete");
+      await expect(readdir(path.join(recoveryDirectory, workspace.id))).resolves.toHaveLength(0);
+      await expect(readFile(path.join(project, "value.txt"), "utf8")).resolves.toBe("value");
     } finally {
       workspaces.close();
     }

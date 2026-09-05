@@ -75,6 +75,20 @@ function toolResult(value: object): CallToolResult {
   };
 }
 
+const TOOL_EXECUTION_ERROR = {
+  code: "tool_execution_failed",
+  message: "Tool execution failed",
+} as const;
+
+function toolError(): CallToolResult {
+  const structuredContent = { error: TOOL_EXECUTION_ERROR };
+  return {
+    content: [{ type: "text", text: TOOL_EXECUTION_ERROR.message }],
+    structuredContent,
+    isError: true,
+  };
+}
+
 async function runTool(
   auth: AuthContext | undefined,
   scope: OAuthScope,
@@ -94,12 +108,8 @@ async function runTool(
   }
   try {
     return toolResult(await operation());
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Tool failed";
-    return {
-      content: [{ type: "text", text: message.slice(0, 2000) }],
-      isError: true,
-    };
+  } catch {
+    return toolError();
   }
 }
 
@@ -112,7 +122,7 @@ export function createMcpServer(
     {
       capabilities: { tools: {} },
       instructions:
-        "Open a workspace before workspace-scoped tools. Inspect with list_directory, stat_path, and read_many. Use apply_patch dryRun before multi-file changes. delete_path is recoverable by default; retain recoveryId. Long-running commands use start_job and poll_job.",
+        "Open a workspace before workspace-scoped tools. Inspect with list_directory, stat_path, and read_many. Use apply_patch dryRun before multi-file changes. delete_path is recoverable by default; retain recoveryId. Long-running commands use start_job and poll_job. For SVN working copies, use runner 'svn' only with status, diff, info, or log; do not read .svn metadata directly.",
     },
   );
   const server = new ToolSpanToolRegistry(protocolServer);

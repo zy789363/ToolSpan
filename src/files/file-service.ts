@@ -2,15 +2,15 @@ import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import {
-  copyFile,
+  link,
   lstat,
   mkdir,
+  open,
   readFile,
   readdir,
   readlink,
   realpath,
   rename,
-  rm,
   rmdir,
   stat,
   symlink,
@@ -32,6 +32,7 @@ const MAX_PATCH_OPERATIONS = 50;
 const MAX_PATCH_NEW_BYTES = 5 * 1024 * 1024;
 const MAX_TREE_ENTRIES = 10_000;
 const MAX_TREE_BYTES = 256 * 1024 * 1024;
+const O_NOFOLLOW = (fsConstants as { O_NOFOLLOW?: number }).O_NOFOLLOW;
 
 export interface ReadFileInput {
   workspaceId: string;
@@ -268,6 +269,25 @@ interface TreeMetrics {
   bytes: number;
 }
 
+interface EntryFingerprint {
+  dev: number | bigint;
+  ino: number | bigint;
+  mode: number | bigint;
+  size: number | bigint;
+  mtimeMs: number | bigint;
+  ctimeMs: number | bigint;
+}
+
+interface TreeState extends TreeMetrics {
+  fingerprints: Map<string, EntryFingerprint>;
+}
+
+interface OwnedEntry {
+  path: string;
+  type: FileSystemEntryType;
+  fingerprint: EntryFingerprint;
+}
+
 interface RecoveryManifest extends TreeMetrics {
   version: 1;
   recoveryId: string;
@@ -282,11 +302,43 @@ interface PreparedPatchOperation {
   targetPath: string;
   beforeContent?: string;
   afterContent?: string;
+  beforeFingerprint?: EntryFingerprint;
   change: PatchChangeResult;
 }
 
+const pathLocks = new Map<string, Promise<void>>();
+
 function isNotFound(error: unknown): boolean {
   return (error as NodeJS.ErrnoException).code === "ENOENT";
+}
+
+async function withPathLocks<T>(paths: readonly string[], operation: () => Promise<T>): Promise<T> {
+  const keys = [...new Set(paths.map(comparisonPath))].sort((left, right) => left.localeCompare(right));
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const previous = keys.map((key) => pathLocks.get(key) ?? Promise.resolve());
+  for (const key of keys) pathLocks.set(key, gate);
+  await Promise.all(previous);
+  try {
+    return await operation();
+  } finally {
+    release();
+    for (const key of keys) {
+      if (pathLocks.get(key) === gate) pathLocks.delete(key);
+    }
+  }
+}
+
+async function withWorkspaceLock<T>(
+  workspaces: WorkspaceService,
+  workspaceId: string,
+  extraPaths: readonly string[],
+  operation: (workspaceRoot: string) => Promise<T>,
+): Promise<T> {
+  const workspaceRoot = await workspaces.resolveWorkspaceRoot(workspaceId);
+  return withPathLocks([workspaceRoot, ...extraPaths], () => operation(workspaceRoot));
 }
 
 async function pathExists(targetPath: string): Promise<boolean> {
@@ -325,6 +377,86 @@ function fileSystemType(stats: Awaited<ReturnType<typeof lstat>>): FileSystemEnt
   if (stats.isFile()) return "file";
   if (stats.isDirectory()) return "directory";
   return "other";
+}
+
+function fingerprint(stats: Awaited<ReturnType<typeof lstat>>): EntryFingerprint {
+  return {
+    dev: stats.dev,
+    ino: stats.ino,
+    mode: stats.mode,
+    size: stats.size,
+    mtimeMs: stats.mtimeMs,
+    ctimeMs: stats.ctimeMs,
+  };
+}
+
+function sameFingerprint(left: EntryFingerprint, right: EntryFingerprint): boolean {
+  return left.dev === right.dev
+    && left.ino === right.ino
+    && left.mode === right.mode
+    && left.size === right.size
+    && left.mtimeMs === right.mtimeMs
+    && left.ctimeMs === right.ctimeMs;
+}
+
+function sameStableFingerprint(left: EntryFingerprint, right: EntryFingerprint): boolean {
+  return left.dev === right.dev
+    && left.ino === right.ino
+    && left.mode === right.mode
+    && left.size === right.size
+    && left.mtimeMs === right.mtimeMs;
+}
+
+function sameEntryIdentity(left: EntryFingerprint, right: EntryFingerprint): boolean {
+  return left.dev === right.dev && left.ino === right.ino && left.mode === right.mode;
+}
+
+async function rememberOwnedEntry(
+  entries: OwnedEntry[],
+  targetPath: string,
+  type: FileSystemEntryType,
+): Promise<void> {
+  entries.push({ path: targetPath, type, fingerprint: fingerprint(await lstat(targetPath)) });
+}
+
+async function removeOwnedEntry(entry: OwnedEntry): Promise<boolean> {
+  let currentStats: Awaited<ReturnType<typeof lstat>>;
+  try {
+    currentStats = await lstat(entry.path);
+  } catch (error) {
+    if (isNotFound(error)) return true;
+    throw error;
+  }
+  const currentFingerprint = fingerprint(currentStats);
+  if (entry.type === "directory"
+    ? !sameEntryIdentity(currentFingerprint, entry.fingerprint)
+    : !sameStableFingerprint(currentFingerprint, entry.fingerprint)) return false;
+  if (entry.type === "directory") {
+    try {
+      await rmdir(entry.path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOTEMPTY"
+        || (error as NodeJS.ErrnoException).code === "EEXIST") {
+        return false;
+      }
+      throw error;
+    }
+  } else {
+    await unlink(entry.path);
+  }
+  return true;
+}
+
+async function rollbackOwnedEntries(entries: readonly OwnedEntry[]): Promise<string[]> {
+  const errors: string[] = [];
+  for (const entry of [...entries].reverse()) {
+    try {
+      await removeOwnedEntry(entry);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : "rollback failed");
+    }
+  }
+  return errors;
 }
 
 function assertNotWorkspaceRoot(workspaceRoot: string, targetPath: string): void {
@@ -378,18 +510,50 @@ async function atomicReplace(
   workspaceId: string,
   relativePath: string,
   content: string,
+  options: { expectedContent?: string; noReplace?: boolean } = {},
 ): Promise<void> {
   const targetPath = await workspaces.resolvePathForWrite(workspaceId, relativePath);
   const temporaryPath = path.join(path.dirname(targetPath), `.${randomUUID()}.tmp`);
+  const temporaryEntries: OwnedEntry[] = [];
+  let initialTarget: EntryFingerprint | undefined;
   try {
+    try {
+      initialTarget = fingerprint(await lstat(targetPath));
+    } catch (error) {
+      if (!isNotFound(error)) throw error;
+    }
+    if (options.noReplace && initialTarget !== undefined) {
+      throw new Error("Target already exists");
+    }
+    if (options.expectedContent !== undefined) {
+      const currentContent = await readBoundedText(targetPath);
+      if (currentContent !== options.expectedContent) throw new Error("File changed during write");
+    }
     await writeFile(temporaryPath, content, { encoding: "utf8", flag: "wx" });
+    await rememberOwnedEntry(temporaryEntries, temporaryPath, "file");
     const verifiedTarget = await workspaces.resolvePathForWrite(workspaceId, relativePath);
     if (comparisonPath(verifiedTarget) !== comparisonPath(targetPath)) {
       throw new Error("Path changed during write");
     }
+    if (options.noReplace) {
+      await link(temporaryPath, targetPath);
+      await unlink(temporaryPath);
+      temporaryEntries.length = 0;
+      return;
+    }
+    if (options.expectedContent !== undefined) {
+      if (initialTarget === undefined) throw new Error("File changed during write");
+      const currentTarget = await lstat(targetPath);
+      if (!sameFingerprint(fingerprint(currentTarget), initialTarget)) {
+        throw new Error("File changed during write");
+      }
+      const currentContent = await readBoundedText(targetPath);
+      if (currentContent !== options.expectedContent) throw new Error("File changed during write");
+    }
     await rename(temporaryPath, targetPath);
+    temporaryEntries.length = 0;
   } catch (error) {
-    await rm(temporaryPath, { force: true });
+    await rollbackOwnedEntries(temporaryEntries);
     throw error;
   }
 }
@@ -402,24 +566,50 @@ async function atomicReplaceBytes(
 ): Promise<void> {
   const targetPath = await workspaces.resolvePathForWrite(workspaceId, relativePath);
   const temporaryPath = path.join(path.dirname(targetPath), `.${randomUUID()}.tmp`);
+  const temporaryEntries: OwnedEntry[] = [];
   try {
     await writeFile(temporaryPath, content, { flag: "wx" });
+    await rememberOwnedEntry(temporaryEntries, temporaryPath, "file");
     const verifiedTarget = await workspaces.resolvePathForWrite(workspaceId, relativePath);
     if (comparisonPath(verifiedTarget) !== comparisonPath(targetPath)) {
       throw new Error("Path changed during write");
     }
     await rename(temporaryPath, targetPath);
+    temporaryEntries.length = 0;
   } catch (error) {
-    await rm(temporaryPath, { force: true });
+    await rollbackOwnedEntries(temporaryEntries);
     throw error;
   }
 }
 
+async function readBoundedBuffer(targetPath: string, maximumBytes: number): Promise<Buffer> {
+  const handle = await open(targetPath, "r");
+  let content: Buffer;
+  try {
+    const fileStats = await handle.stat();
+    if (!fileStats.isFile()) throw new Error("Path is not a regular file");
+    if (fileStats.size > maximumBytes) {
+      throw new Error(maximumBytes === MAX_READ_BYTES
+        ? "File exceeds the 1 MiB read limit"
+        : `File exceeds the ${String(maximumBytes)} byte read limit`);
+    }
+    const buffer = Buffer.allocUnsafe(maximumBytes + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    const finalStats = await handle.stat();
+    if (bytesRead > maximumBytes || finalStats.size > maximumBytes) {
+      throw new Error(maximumBytes === MAX_READ_BYTES
+        ? "File exceeds the 1 MiB read limit"
+        : `File exceeds the ${String(maximumBytes)} byte read limit`);
+    }
+    content = Buffer.from(buffer.subarray(0, bytesRead));
+  } finally {
+    await handle.close();
+  }
+  return content;
+}
+
 async function readBoundedText(targetPath: string): Promise<string> {
-  const fileStats = await lstat(targetPath);
-  if (!fileStats.isFile()) throw new Error("Path is not a regular file");
-  if (fileStats.size > MAX_READ_BYTES) throw new Error("File exceeds the 1 MiB read limit");
-  const content = await readFile(targetPath, "utf8");
+  const content = (await readBoundedBuffer(targetPath, MAX_READ_BYTES)).toString("utf8");
   if (content.includes("\0")) throw new Error("Binary files are not supported");
   return content;
 }
@@ -430,7 +620,7 @@ async function hashFile(targetPath: string, maximumBytes: number): Promise<strin
   if (fileStats.size > maximumBytes) {
     throw new Error(`File exceeds the ${String(maximumBytes)} byte hash limit`);
   }
-  return createHash("sha256").update(await readFile(targetPath)).digest("hex");
+  return createHash("sha256").update(await readBoundedBuffer(targetPath, maximumBytes)).digest("hex");
 }
 
 async function scanTree(
@@ -460,6 +650,16 @@ async function scanTree(
       return;
     }
     if (!currentStats.isDirectory()) throw new Error("Unsupported filesystem entry type");
+    const canonicalCurrent = await realpath(currentPath);
+    if (comparisonPath(canonicalCurrent) !== comparisonPath(currentPath)) {
+      if (validateLinkTargets && workspaceRoot !== undefined && !isWithin(canonicalCurrent, workspaceRoot)) {
+        throw new Error("Symbolic link target escapes workspace");
+      }
+      return;
+    }
+    if (workspaceRoot !== undefined && !isWithin(canonicalCurrent, workspaceRoot)) {
+      throw new Error("Path escapes workspace");
+    }
     const children = await readdir(currentPath);
     children.sort((left, right) => left.localeCompare(right, "en"));
     for (const child of children) await visit(path.join(currentPath, child));
@@ -469,15 +669,137 @@ async function scanTree(
   return { entries, bytes };
 }
 
+async function captureTreeState(
+  targetPath: string,
+  workspaceRoot?: string,
+  validateLinkTargets = false,
+): Promise<TreeState> {
+  const fingerprints = new Map<string, EntryFingerprint>();
+  let entries = 0;
+  let bytes = 0;
+  const visit = async (currentPath: string, relativePath: string): Promise<void> => {
+    const currentStats = await lstat(currentPath);
+    fingerprints.set(relativePath, fingerprint(currentStats));
+    entries += 1;
+    if (entries > MAX_TREE_ENTRIES) throw new Error("Path exceeds the 10000 entry limit");
+    if (currentStats.isFile()) {
+      bytes += currentStats.size;
+      if (bytes > MAX_TREE_BYTES) throw new Error("Path exceeds the 256 MiB copy limit");
+      return;
+    }
+    if (currentStats.isSymbolicLink()) {
+      if (validateLinkTargets && workspaceRoot !== undefined
+        && !isWithin(await realpath(currentPath), workspaceRoot)) {
+        throw new Error("Symbolic link target escapes workspace");
+      }
+      return;
+    }
+    if (!currentStats.isDirectory()) throw new Error("Unsupported filesystem entry type");
+    const canonicalCurrent = await realpath(currentPath);
+    if (comparisonPath(canonicalCurrent) !== comparisonPath(currentPath)) {
+      if (validateLinkTargets && workspaceRoot !== undefined && !isWithin(canonicalCurrent, workspaceRoot)) {
+        throw new Error("Symbolic link target escapes workspace");
+      }
+      return;
+    }
+    if (workspaceRoot !== undefined && !isWithin(canonicalCurrent, workspaceRoot)) {
+      throw new Error("Path escapes workspace");
+    }
+    const children = await readdir(currentPath);
+    children.sort((left, right) => left.localeCompare(right, "en"));
+    for (const child of children) {
+      await visit(path.join(currentPath, child), relativePath === ""
+        ? child
+        : path.join(relativePath, child));
+    }
+  };
+  await visit(targetPath, "");
+  return { entries, bytes, fingerprints };
+}
+
+function sameTreeState(left: TreeState, right: TreeState): boolean {
+  if (left.entries !== right.entries || left.bytes !== right.bytes
+    || left.fingerprints.size !== right.fingerprints.size) return false;
+  for (const [relativePath, leftFingerprint] of left.fingerprints) {
+    const rightFingerprint = right.fingerprints.get(relativePath);
+    if (rightFingerprint === undefined || !sameStableFingerprint(leftFingerprint, rightFingerprint)) return false;
+  }
+  return true;
+}
+
+async function reparseTarget(
+  sourcePath: string,
+  sourceStats: Awaited<ReturnType<typeof lstat>>,
+): Promise<string | undefined> {
+  if (!sourceStats.isDirectory() || sourceStats.isSymbolicLink()) return undefined;
+  const canonicalTarget = await realpath(sourcePath);
+  return comparisonPath(canonicalTarget) === comparisonPath(sourcePath)
+    ? undefined
+    : canonicalTarget;
+}
+
+async function symlinkType(sourcePath: string): Promise<"file" | "junction" | undefined> {
+  if (process.platform !== "win32") return undefined;
+  try {
+    return (await stat(sourcePath)).isDirectory() ? "junction" : "file";
+  } catch (error) {
+    if (isNotFound(error)) return "file";
+    throw error;
+  }
+}
+
+async function copySymlink(sourcePath: string, destinationPath: string): Promise<void> {
+  const linkTarget = await readlink(sourcePath);
+  const copiedTarget = path.isAbsolute(linkTarget)
+    ? linkTarget
+    : path.relative(
+      path.dirname(destinationPath),
+      path.resolve(path.dirname(sourcePath), linkTarget),
+    ) || ".";
+  await symlink(copiedTarget, destinationPath, await symlinkType(sourcePath));
+}
+
+async function moveSymlink(sourcePath: string, destinationPath: string): Promise<void> {
+  await symlink(await readlink(sourcePath), destinationPath, await symlinkType(sourcePath));
+}
+
+async function copyRegularFile(sourcePath: string, destinationPath: string): Promise<void> {
+  const sourceHandle = await open(
+    sourcePath,
+    O_NOFOLLOW === undefined ? "r" : fsConstants.O_RDONLY | O_NOFOLLOW,
+  );
+  let destinationHandle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    const sourceStats = await sourceHandle.stat();
+    if (!sourceStats.isFile()) throw new Error("Path is not a regular file");
+    destinationHandle = await open(
+      destinationPath,
+      fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL,
+      sourceStats.mode & 0o777,
+    );
+    const buffer = Buffer.allocUnsafe(64 * 1024);
+    while (true) {
+      const { bytesRead } = await sourceHandle.read(buffer, 0, buffer.length, null);
+      if (bytesRead === 0) break;
+      await destinationHandle.write(buffer, 0, bytesRead);
+    }
+  } finally {
+    await destinationHandle?.close();
+    await sourceHandle.close();
+  }
+}
+
 async function copyEntry(
   sourcePath: string,
   destinationPath: string,
   workspaceRoot?: string,
   validateLinkTargets = false,
+  ownedEntries: OwnedEntry[] = [],
 ): Promise<void> {
   const sourceStats = await lstat(sourcePath);
   if (sourceStats.isFile()) {
-    await copyFile(sourcePath, destinationPath, fsConstants.COPYFILE_EXCL);
+    await copyRegularFile(sourcePath, destinationPath);
+    await rememberOwnedEntry(ownedEntries, destinationPath, "file");
     return;
   }
   if (sourceStats.isSymbolicLink()) {
@@ -487,16 +809,23 @@ async function copyEntry(
         throw new Error("Symbolic link target escapes workspace");
       }
     }
-    await symlink(
-      await readlink(sourcePath),
-      destinationPath,
-      process.platform === "win32" ? "junction" : undefined,
-    );
+    await copySymlink(sourcePath, destinationPath);
+    await rememberOwnedEntry(ownedEntries, destinationPath, "symlink");
+    return;
+  }
+  const reparse = await reparseTarget(sourcePath, sourceStats);
+  if (reparse !== undefined) {
+    if (validateLinkTargets && workspaceRoot !== undefined && !isWithin(reparse, workspaceRoot)) {
+      throw new Error("Symbolic link target escapes workspace");
+    }
+    await copySymlink(sourcePath, destinationPath);
+    await rememberOwnedEntry(ownedEntries, destinationPath, "symlink");
     return;
   }
   if (!sourceStats.isDirectory()) throw new Error("Unsupported filesystem entry type");
 
   await mkdir(destinationPath);
+  await rememberOwnedEntry(ownedEntries, destinationPath, "directory");
   const children = await readdir(sourcePath);
   children.sort((left, right) => left.localeCompare(right, "en"));
   for (const child of children) {
@@ -505,15 +834,115 @@ async function copyEntry(
       path.join(destinationPath, child),
       workspaceRoot,
       validateLinkTargets,
+      ownedEntries,
     );
+  }
+}
+
+async function commitStagedEntry(stagedPath: string, destinationPath: string): Promise<void> {
+  const ownedEntries: OwnedEntry[] = [];
+  const commit = async (sourcePath: string, targetPath: string): Promise<void> => {
+    const sourceStats = await lstat(sourcePath);
+    if (sourceStats.isFile()) {
+      await link(sourcePath, targetPath);
+      await rememberOwnedEntry(ownedEntries, targetPath, "file");
+      return;
+    }
+    if (sourceStats.isSymbolicLink()) {
+      await copySymlink(sourcePath, targetPath);
+      await rememberOwnedEntry(ownedEntries, targetPath, "symlink");
+      return;
+    }
+    const reparse = await reparseTarget(sourcePath, sourceStats);
+    if (reparse !== undefined) {
+      await copySymlink(sourcePath, targetPath);
+      await rememberOwnedEntry(ownedEntries, targetPath, "symlink");
+      return;
+    }
+    if (!sourceStats.isDirectory()) throw new Error("Unsupported filesystem entry type");
+    await mkdir(targetPath);
+    await rememberOwnedEntry(ownedEntries, targetPath, "directory");
+    const children = await readdir(sourcePath);
+    children.sort((left, right) => left.localeCompare(right, "en"));
+    for (const child of children) {
+      await commit(path.join(sourcePath, child), path.join(targetPath, child));
+    }
+  };
+
+  try {
+    await commit(stagedPath, destinationPath);
+  } catch (error) {
+    const rollbackErrors = await rollbackOwnedEntries(ownedEntries);
+    if (rollbackErrors.length > 0) {
+      const originalMessage = error instanceof Error ? error.message : "staged commit failed";
+      throw new Error(`${originalMessage}; rollback errors: ${rollbackErrors.join("; ")}`);
+    }
+    throw error;
+  }
+}
+
+async function moveEntryNoReplace(
+  sourcePath: string,
+  destinationPath: string,
+  expectedState: TreeState,
+): Promise<void> {
+  const ownedEntries: OwnedEntry[] = [];
+  const copyForMove = async (source: string, target: string): Promise<void> => {
+    const sourceStats = await lstat(source);
+    if (sourceStats.isFile()) {
+      await link(source, target);
+      await rememberOwnedEntry(ownedEntries, target, "file");
+      return;
+    }
+    if (sourceStats.isSymbolicLink()) {
+      await moveSymlink(source, target);
+      await rememberOwnedEntry(ownedEntries, target, "symlink");
+      return;
+    }
+    const reparse = await reparseTarget(source, sourceStats);
+    if (reparse !== undefined) {
+      await moveSymlink(source, target);
+      await rememberOwnedEntry(ownedEntries, target, "symlink");
+      return;
+    }
+    if (!sourceStats.isDirectory()) throw new Error("Unsupported filesystem entry type");
+    await mkdir(target);
+    await rememberOwnedEntry(ownedEntries, target, "directory");
+    const children = await readdir(source);
+    children.sort((left, right) => left.localeCompare(right, "en"));
+    for (const child of children) {
+      await copyForMove(path.join(source, child), path.join(target, child));
+    }
+  };
+
+  try {
+    await copyForMove(sourcePath, destinationPath);
+    const currentState = await captureTreeState(sourcePath);
+    if (!sameTreeState(currentState, expectedState)) {
+      throw new Error("Source changed during move");
+    }
+    await removeEntry(sourcePath, true);
+  } catch (error) {
+    const rollbackErrors = await rollbackOwnedEntries(ownedEntries);
+    if (rollbackErrors.length > 0) {
+      const originalMessage = error instanceof Error ? error.message : "move failed";
+      throw new Error(`${originalMessage}; rollback errors: ${rollbackErrors.join("; ")}`);
+    }
+    throw error;
   }
 }
 
 async function removeEntry(targetPath: string, recursive: boolean): Promise<void> {
   const targetStats = await lstat(targetPath);
-  if (targetStats.isDirectory() && !targetStats.isSymbolicLink()) {
-    if (recursive) await rm(targetPath, { recursive: true });
-    else await rmdir(targetPath);
+  if (targetStats.isDirectory() && !targetStats.isSymbolicLink()
+    && await reparseTarget(targetPath, targetStats) === undefined) {
+    if (!recursive) {
+      await rmdir(targetPath);
+      return;
+    }
+    const children = await readdir(targetPath);
+    for (const child of children) await removeEntry(path.join(targetPath, child), true);
+    await rmdir(targetPath);
     return;
   }
   await unlink(targetPath);
@@ -554,12 +983,7 @@ export function createFileService(
     }
 
     const canonicalPath = await workspaces.resolveExistingPath(input.workspaceId, input.path);
-    const fileStats = await stat(canonicalPath);
-    if (!fileStats.isFile()) throw new Error("Path is not a file");
-    if (fileStats.size > MAX_READ_BYTES) throw new Error("File exceeds the 1 MiB read limit");
-
-    const content = await readFile(canonicalPath, "utf8");
-    if (content.includes("\0")) throw new Error("Binary files are not supported");
+    const content = await readBoundedText(canonicalPath);
     const allLines = content.split(/\r?\n/u);
     const lines = allLines.slice(offset, offset + limit);
     const nextOffset = offset + lines.length < allLines.length ? offset + lines.length : null;
@@ -578,23 +1002,27 @@ export function createFileService(
     async write(input: WriteFileInput): Promise<WriteFileResult> {
       const bytesWritten = Buffer.byteLength(input.content, "utf8");
       if (bytesWritten > MAX_WRITE_BYTES) throw new Error("Content exceeds the 1 MiB write limit");
-      await atomicReplace(workspaces, input.workspaceId, input.path, input.content);
+      await withWorkspaceLock(workspaces, input.workspaceId, [], async () => {
+        await atomicReplace(workspaces, input.workspaceId, input.path, input.content);
+      });
       return { path: normalizeToolPath(input.path), bytesWritten };
     },
 
     async edit(input: EditFileInput): Promise<EditFileResult> {
       if (input.oldText.length === 0) throw new Error("oldText must not be empty");
-      const existingPath = await workspaces.resolveExistingPath(input.workspaceId, input.path);
-      const content = await readFile(existingPath, "utf8");
-      const occurrences = content.split(input.oldText).length - 1;
-      if (occurrences !== 1) {
-        throw new Error(`oldText must occur exactly once; found ${occurrences}`);
-      }
-      const updatedContent = content.replace(input.oldText, input.newText);
-      if (Buffer.byteLength(updatedContent, "utf8") > MAX_WRITE_BYTES) {
-        throw new Error("Edited content exceeds the 1 MiB write limit");
-      }
-      await atomicReplace(workspaces, input.workspaceId, input.path, updatedContent);
+      await withWorkspaceLock(workspaces, input.workspaceId, [], async () => {
+        const existingPath = await workspaces.resolveExistingPath(input.workspaceId, input.path);
+        const content = await readBoundedText(existingPath);
+        const occurrences = content.split(input.oldText).length - 1;
+        if (occurrences !== 1) {
+          throw new Error(`oldText must occur exactly once; found ${occurrences}`);
+        }
+        const updatedContent = content.replace(input.oldText, input.newText);
+        if (Buffer.byteLength(updatedContent, "utf8") > MAX_WRITE_BYTES) {
+          throw new Error("Edited content exceeds the 1 MiB write limit");
+        }
+        await atomicReplace(workspaces, input.workspaceId, input.path, updatedContent, { expectedContent: content });
+      });
       return { path: normalizeToolPath(input.path), replacements: 1 };
     },
 
@@ -626,7 +1054,7 @@ export function createFileService(
 
       const arguments_ = ["--json", "--color", "never"];
       if (input.glob !== undefined) arguments_.push("--glob", input.glob);
-      arguments_.push(input.pattern, ".");
+      arguments_.push("--regexp", input.pattern, ".");
       const output = await runRipgrep(arguments_, root);
       const matches: SearchMatch[] = [];
       for (const line of output.split(/\r?\n/u)) {
@@ -657,7 +1085,9 @@ export function createFileService(
       }
       const bytes = Buffer.from(input.base64, "base64");
       if (bytes.length > MAX_ASSET_BYTES) throw new Error("Asset exceeds the 25 MiB import limit");
-      await atomicReplaceBytes(workspaces, input.workspaceId, input.path, bytes);
+      await withWorkspaceLock(workspaces, input.workspaceId, [], async () => {
+        await atomicReplaceBytes(workspaces, input.workspaceId, input.path, bytes);
+      });
       return {
         path: normalizeToolPath(input.path),
         mediaType: input.mediaType,
@@ -729,169 +1159,290 @@ export function createFileService(
     },
 
     async makeDirectory(input: MakeDirectoryInput): Promise<MakeDirectoryResult> {
-      const targetPath = await workspaces.resolvePathForCreate(input.workspaceId, input.path);
-      const workspaceRoot = await workspaces.resolveWorkspaceRoot(input.workspaceId);
-      assertNotWorkspaceRoot(workspaceRoot, targetPath);
-      try {
-        const existingStats = await lstat(targetPath);
-        if (!existingStats.isDirectory() || existingStats.isSymbolicLink()) {
-          throw new Error("Path already exists and is not a directory");
+      return withWorkspaceLock(workspaces, input.workspaceId, [], async (workspaceRoot) => {
+        const targetPath = await workspaces.resolvePathForCreate(input.workspaceId, input.path);
+        assertNotWorkspaceRoot(workspaceRoot, targetPath);
+        try {
+          const existingStats = await lstat(targetPath);
+          if (!existingStats.isDirectory() || existingStats.isSymbolicLink()) {
+            throw new Error("Path already exists and is not a directory");
+          }
+          return { path: normalizeToolPath(input.path), created: false };
+        } catch (error) {
+          if (!isNotFound(error)) throw error;
         }
-        return { path: normalizeToolPath(input.path), created: false };
-      } catch (error) {
-        if (!isNotFound(error)) throw error;
-      }
 
-      await mkdir(targetPath, { recursive: input.recursive ?? true });
-      await workspaces.resolveExistingPath(input.workspaceId, input.path);
-      return { path: normalizeToolPath(input.path), created: true };
+        const createdEntries: OwnedEntry[] = [];
+        let targetCreated = false;
+        try {
+          if (input.recursive === false) {
+            try {
+              await mkdir(targetPath);
+              await rememberOwnedEntry(createdEntries, targetPath, "directory");
+              targetCreated = true;
+            } catch (error) {
+              if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+              const existingStats = await lstat(targetPath);
+              if (!existingStats.isDirectory() || existingStats.isSymbolicLink()) {
+                throw new Error("Path already exists and is not a directory");
+              }
+              return { path: normalizeToolPath(input.path), created: false };
+            }
+          } else {
+            const missing: string[] = [];
+            let ancestor = targetPath;
+            while (true) {
+              try {
+                const ancestorStats = await lstat(ancestor);
+                if (!ancestorStats.isDirectory() || ancestorStats.isSymbolicLink()) {
+                  throw new Error("Path already exists and is not a directory");
+                }
+                break;
+              } catch (error) {
+                if (!isNotFound(error)) throw error;
+                missing.push(path.basename(ancestor));
+                const parent = path.dirname(ancestor);
+                if (parent === ancestor) throw new Error("Path escapes workspace");
+                ancestor = parent;
+              }
+            }
+            for (const segment of missing.reverse()) {
+              const next = path.join(ancestor, segment);
+              try {
+                await mkdir(next);
+                await rememberOwnedEntry(createdEntries, next, "directory");
+                if (comparisonPath(next) === comparisonPath(targetPath)) targetCreated = true;
+              } catch (error) {
+                if (!isNotFound(error) && (error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+                const nextStats = await lstat(next);
+                if (!nextStats.isDirectory() || nextStats.isSymbolicLink()) {
+                  throw new Error("Path already exists and is not a directory");
+                }
+              }
+              ancestor = next;
+            }
+          }
+        } catch (error) {
+          await rollbackOwnedEntries(createdEntries);
+          throw error;
+        }
+        try {
+          await workspaces.resolveExistingPath(input.workspaceId, input.path);
+        } catch (error) {
+          await rollbackOwnedEntries(createdEntries);
+          throw error;
+        }
+        return { path: normalizeToolPath(input.path), created: targetCreated };
+      });
     },
 
     async movePath(input: TransferPathInput): Promise<TransferPathResult> {
-      const workspaceRoot = await workspaces.resolveWorkspaceRoot(input.workspaceId);
-      const sourcePath = await workspaces.resolveEntryPath(input.workspaceId, input.source);
-      const destinationPath = await workspaces.resolvePathForWrite(input.workspaceId, input.destination);
-      assertNotWorkspaceRoot(workspaceRoot, sourcePath);
-      assertNotWorkspaceRoot(workspaceRoot, destinationPath);
-      if (await pathExists(destinationPath)) throw new Error("Destination already exists");
-      const sourceStats = await lstat(sourcePath);
-      if (sourceStats.isDirectory() && !sourceStats.isSymbolicLink()) {
-        assertDirectoryDestination(sourcePath, destinationPath);
-      }
-      const metrics = sourceStats.isFile()
-        ? { entries: 1, bytes: sourceStats.size }
-        : sourceStats.isSymbolicLink()
-          ? { entries: 1, bytes: 0 }
-          : {};
+      return withWorkspaceLock(workspaces, input.workspaceId, [], async (workspaceRoot) => {
+        const sourcePath = await workspaces.resolveEntryPath(input.workspaceId, input.source);
+        const destinationPath = await workspaces.resolvePathForWrite(input.workspaceId, input.destination);
+        assertNotWorkspaceRoot(workspaceRoot, sourcePath);
+        assertNotWorkspaceRoot(workspaceRoot, destinationPath);
+        if (await pathExists(destinationPath)) throw new Error("Destination already exists");
+        const sourceStats = await lstat(sourcePath);
+        if (sourceStats.isDirectory() && !sourceStats.isSymbolicLink()) {
+          assertDirectoryDestination(sourcePath, destinationPath);
+        }
+        const sourceState = await captureTreeState(sourcePath);
 
-      const verifiedSource = await workspaces.resolveEntryPath(input.workspaceId, input.source);
-      const verifiedDestination = await workspaces.resolvePathForWrite(input.workspaceId, input.destination);
-      if (
-        comparisonPath(verifiedSource) !== comparisonPath(sourcePath)
-        || comparisonPath(verifiedDestination) !== comparisonPath(destinationPath)
-      ) {
-        throw new Error("Path changed during move");
-      }
-      if (await pathExists(destinationPath)) throw new Error("Destination already exists");
-      await rename(sourcePath, destinationPath);
-      return {
-        source: normalizeToolPath(input.source),
-        destination: normalizeToolPath(input.destination),
-        type: fileSystemType(sourceStats),
-        ...metrics,
-      };
+        const verifiedSource = await workspaces.resolveEntryPath(input.workspaceId, input.source);
+        const verifiedDestination = await workspaces.resolvePathForWrite(input.workspaceId, input.destination);
+        if (
+          comparisonPath(verifiedSource) !== comparisonPath(sourcePath)
+          || comparisonPath(verifiedDestination) !== comparisonPath(destinationPath)
+        ) {
+          throw new Error("Path changed during move");
+        }
+        await moveEntryNoReplace(sourcePath, destinationPath, sourceState);
+        return {
+          source: normalizeToolPath(input.source),
+          destination: normalizeToolPath(input.destination),
+          type: fileSystemType(sourceStats),
+          entries: sourceState.entries,
+          bytes: sourceState.bytes,
+        };
+      });
     },
 
     async copyPath(input: TransferPathInput): Promise<TransferPathResult> {
-      const workspaceRoot = await workspaces.resolveWorkspaceRoot(input.workspaceId);
-      const sourcePath = await workspaces.resolveEntryPath(input.workspaceId, input.source);
-      const destinationPath = await workspaces.resolvePathForWrite(input.workspaceId, input.destination);
-      assertNotWorkspaceRoot(workspaceRoot, sourcePath);
-      assertNotWorkspaceRoot(workspaceRoot, destinationPath);
-      if (await pathExists(destinationPath)) throw new Error("Destination already exists");
-      const sourceStats = await lstat(sourcePath);
-      if (sourceStats.isDirectory() && !sourceStats.isSymbolicLink()) {
-        assertDirectoryDestination(sourcePath, destinationPath);
-      }
-      const metrics = await scanTree(sourcePath, workspaceRoot, true);
-      try {
-        await copyEntry(sourcePath, destinationPath, workspaceRoot, true);
-      } catch (error) {
-        await rm(destinationPath, { recursive: true, force: true });
-        throw error;
-      }
-      return {
-        source: normalizeToolPath(input.source),
-        destination: normalizeToolPath(input.destination),
-        type: fileSystemType(sourceStats),
-        ...metrics,
-      };
+      return withWorkspaceLock(workspaces, input.workspaceId, [], async (workspaceRoot) => {
+        const sourcePath = await workspaces.resolveEntryPath(input.workspaceId, input.source);
+        const destinationPath = await workspaces.resolvePathForWrite(input.workspaceId, input.destination);
+        assertNotWorkspaceRoot(workspaceRoot, sourcePath);
+        assertNotWorkspaceRoot(workspaceRoot, destinationPath);
+        if (await pathExists(destinationPath)) throw new Error("Destination already exists");
+        const sourceStats = await lstat(sourcePath);
+        if (sourceStats.isDirectory() && !sourceStats.isSymbolicLink()) {
+          assertDirectoryDestination(sourcePath, destinationPath);
+        }
+        const sourceState = await captureTreeState(sourcePath, workspaceRoot, true);
+        const stagingPath = path.join(path.dirname(destinationPath), `.${randomUUID()}.webgpt-copy`);
+        const stagingEntries: OwnedEntry[] = [];
+        try {
+          await copyEntry(sourcePath, stagingPath, workspaceRoot, true, stagingEntries);
+          if (!sameTreeState(await captureTreeState(sourcePath, workspaceRoot, true), sourceState)) {
+            throw new Error("Source changed during copy");
+          }
+          await commitStagedEntry(stagingPath, destinationPath);
+        } catch (error) {
+          const cleanupErrors = await rollbackOwnedEntries(stagingEntries);
+          if (cleanupErrors.length > 0) {
+            const originalMessage = error instanceof Error ? error.message : "copy failed";
+            throw new Error(`${originalMessage}; cleanup errors: ${cleanupErrors.join("; ")}`);
+          }
+          throw error;
+        }
+        const cleanupErrors = await rollbackOwnedEntries(stagingEntries);
+        if (cleanupErrors.length > 0) {
+          throw new Error(`Copy staging cleanup failed: ${cleanupErrors.join("; ")}`);
+        }
+        return {
+          source: normalizeToolPath(input.source),
+          destination: normalizeToolPath(input.destination),
+          type: fileSystemType(sourceStats),
+          entries: sourceState.entries,
+          bytes: sourceState.bytes,
+        };
+      });
     },
 
     async deletePath(input: DeletePathInput): Promise<DeletePathResult> {
       assertUuid(input.workspaceId, "workspaceId");
-      const workspaceRoot = await workspaces.resolveWorkspaceRoot(input.workspaceId);
-      const sourcePath = await workspaces.resolveEntryPath(input.workspaceId, input.path);
-      assertNotWorkspaceRoot(workspaceRoot, sourcePath);
-      const sourceStats = await lstat(sourcePath);
-      const sourceType = fileSystemType(sourceStats);
-      const recursive = input.recursive ?? false;
-      if (sourceStats.isDirectory() && !sourceStats.isSymbolicLink() && !recursive) {
-        if ((await readdir(sourcePath)).length > 0) {
-          throw new Error("Non-empty directories require recursive=true");
+      return withWorkspaceLock(workspaces, input.workspaceId, [], async (workspaceRoot) => {
+        const sourcePath = await workspaces.resolveEntryPath(input.workspaceId, input.path);
+        assertNotWorkspaceRoot(workspaceRoot, sourcePath);
+        const sourceStats = await lstat(sourcePath);
+        const sourceType = fileSystemType(sourceStats);
+        const recursive = input.recursive ?? false;
+        if (sourceStats.isDirectory() && !sourceStats.isSymbolicLink() && !recursive) {
+          if ((await readdir(sourcePath)).length > 0) {
+            throw new Error("Non-empty directories require recursive=true");
+          }
         }
-      }
-      const deletedAt = new Date().toISOString();
-      if (input.permanent === true) {
-        await removeEntry(sourcePath, recursive);
+        const sourceState = await captureTreeState(sourcePath);
+        const verifySource = async (): Promise<void> => {
+          const verifiedSource = await workspaces.resolveEntryPath(input.workspaceId, input.path);
+          if (comparisonPath(verifiedSource) !== comparisonPath(sourcePath)
+            || !sameTreeState(await captureTreeState(sourcePath), sourceState)) {
+            throw new Error("Path changed during delete");
+          }
+        };
+        const deletedAt = new Date().toISOString();
+        if (input.permanent === true) {
+          await verifySource();
+          const localStagingPath = path.join(path.dirname(sourcePath), `.${randomUUID()}.webgpt-delete`);
+          let moved = false;
+          try {
+            await rename(sourcePath, localStagingPath);
+            moved = true;
+            if (!sameTreeState(await captureTreeState(localStagingPath), sourceState)) {
+              throw new Error("Path changed during delete");
+            }
+            await removeEntry(localStagingPath, true);
+          } catch (error) {
+            if (moved) {
+              try {
+                const currentState = await captureTreeState(localStagingPath);
+                await moveEntryNoReplace(localStagingPath, sourcePath, currentState);
+              } catch {
+                // Keep the staging path as a recoverable fail-safe when the original path is contested.
+              }
+            }
+            throw error;
+          }
+          return {
+            path: normalizeToolPath(input.path),
+            type: sourceType,
+            permanent: true,
+            deletedAt,
+            entries: sourceState.entries,
+            bytes: sourceState.bytes,
+          };
+        }
+
+        const recoveryId = randomUUID();
+        const workspaceRecoveryDirectory = path.join(recoveryDirectory, input.workspaceId);
+        const finalRecoveryPath = path.join(workspaceRecoveryDirectory, recoveryId);
+        const stagedRecoveryPath = path.join(workspaceRecoveryDirectory, `.${recoveryId}.${randomUUID()}.tmp`);
+        const payloadPath = path.join(stagedRecoveryPath, "payload");
+        await mkdir(workspaceRecoveryDirectory, { recursive: true });
+        const stagingEntries: OwnedEntry[] = [];
+        let recoveryCommitted = false;
+        let committedRecoveryState: TreeState | undefined;
+        let localStagingPath: string | undefined;
+        try {
+          await mkdir(stagedRecoveryPath);
+          await rememberOwnedEntry(stagingEntries, stagedRecoveryPath, "directory");
+          await copyEntry(sourcePath, payloadPath, undefined, false, stagingEntries);
+          const copiedMetrics = await scanTree(payloadPath);
+          if (copiedMetrics.entries !== sourceState.entries || copiedMetrics.bytes !== sourceState.bytes) {
+            throw new Error("Recovery copy verification failed");
+          }
+          await verifySource();
+          const manifest: RecoveryManifest = {
+            version: 1,
+            recoveryId,
+            workspaceId: input.workspaceId,
+            originalPath: normalizeToolPath(input.path),
+            type: sourceType,
+            deletedAt,
+            entries: sourceState.entries,
+            bytes: sourceState.bytes,
+          };
+          const manifestPath = path.join(stagedRecoveryPath, "manifest.json");
+          await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, {
+            encoding: "utf8",
+            flag: "wx",
+          });
+          await rememberOwnedEntry(stagingEntries, manifestPath, "file");
+          if (await pathExists(finalRecoveryPath)) throw new Error("Recovery record already exists");
+          await rename(stagedRecoveryPath, finalRecoveryPath);
+          recoveryCommitted = true;
+          committedRecoveryState = await captureTreeState(finalRecoveryPath);
+          localStagingPath = path.join(path.dirname(sourcePath), `.${randomUUID()}.webgpt-delete`);
+          await verifySource();
+          await rename(sourcePath, localStagingPath);
+          if (!sameTreeState(await captureTreeState(localStagingPath), sourceState)) {
+            throw new Error("Path changed during delete");
+          }
+          await removeEntry(localStagingPath, true);
+        } catch (error) {
+          if (localStagingPath !== undefined) {
+            try {
+              const currentState = await captureTreeState(localStagingPath);
+              await moveEntryNoReplace(localStagingPath, sourcePath, currentState);
+            } catch {
+              // Preserve contested data in the staging path and recovery record.
+            }
+          }
+          if (recoveryCommitted && committedRecoveryState !== undefined) {
+            try {
+              if (sameTreeState(await captureTreeState(finalRecoveryPath), committedRecoveryState)) {
+                await removeEntry(finalRecoveryPath, true);
+              }
+            } catch {
+              // Fail safe: leave the recovery record when its ownership is uncertain.
+            }
+          } else {
+            await rollbackOwnedEntries(stagingEntries);
+          }
+          throw error;
+        }
+
         return {
           path: normalizeToolPath(input.path),
           type: sourceType,
-          permanent: true,
+          permanent: false,
           deletedAt,
-          ...(sourceStats.isFile()
-            ? { entries: 1, bytes: sourceStats.size }
-            : sourceStats.isSymbolicLink()
-              ? { entries: 1, bytes: 0 }
-              : {}),
-        };
-      }
-
-      const metrics = await scanTree(sourcePath);
-      const recoveryId = randomUUID();
-      const workspaceRecoveryDirectory = path.join(recoveryDirectory, input.workspaceId);
-      const finalRecoveryPath = path.join(workspaceRecoveryDirectory, recoveryId);
-      const stagedRecoveryPath = path.join(workspaceRecoveryDirectory, `.${recoveryId}.${randomUUID()}.tmp`);
-      const payloadPath = path.join(stagedRecoveryPath, "payload");
-      await mkdir(workspaceRecoveryDirectory, { recursive: true });
-      try {
-        await mkdir(stagedRecoveryPath);
-        await copyEntry(sourcePath, payloadPath);
-        const copiedMetrics = await scanTree(payloadPath);
-        if (copiedMetrics.entries !== metrics.entries || copiedMetrics.bytes !== metrics.bytes) {
-          throw new Error("Recovery copy verification failed");
-        }
-        const manifest: RecoveryManifest = {
-          version: 1,
           recoveryId,
-          workspaceId: input.workspaceId,
-          originalPath: normalizeToolPath(input.path),
-          type: sourceType,
-          deletedAt,
-          ...metrics,
+          entries: sourceState.entries,
+          bytes: sourceState.bytes,
         };
-        await writeFile(
-          path.join(stagedRecoveryPath, "manifest.json"),
-          `${JSON.stringify(manifest, null, 2)}\n`,
-          { encoding: "utf8", flag: "wx" },
-        );
-        await rename(stagedRecoveryPath, finalRecoveryPath);
-
-        const verifiedSource = await workspaces.resolveEntryPath(input.workspaceId, input.path);
-        if (comparisonPath(verifiedSource) !== comparisonPath(sourcePath)) {
-          throw new Error("Path changed during delete");
-        }
-        const localStagingPath = path.join(path.dirname(sourcePath), `.${randomUUID()}.webgpt-delete`);
-        try {
-          await rename(sourcePath, localStagingPath);
-        } catch (error) {
-          await rm(finalRecoveryPath, { recursive: true, force: true });
-          throw error;
-        }
-        await removeEntry(localStagingPath, true);
-      } catch (error) {
-        await rm(stagedRecoveryPath, { recursive: true, force: true });
-        throw error;
-      }
-
-      return {
-        path: normalizeToolPath(input.path),
-        type: sourceType,
-        permanent: false,
-        deletedAt,
-        recoveryId,
-        ...metrics,
-      };
+      });
     },
 
     async restorePath(input: RestorePathInput): Promise<RestorePathResult> {
@@ -903,33 +1454,42 @@ export function createFileService(
         throw new Error("Recovery record does not belong to this workspace");
       }
       const destination = input.destination ?? manifest.originalPath;
-      const workspaceRoot = await workspaces.resolveWorkspaceRoot(input.workspaceId);
-      const destinationPath = await workspaces.resolvePathForWrite(input.workspaceId, destination);
-      assertNotWorkspaceRoot(workspaceRoot, destinationPath);
-      if (await pathExists(destinationPath)) throw new Error("Restore destination already exists");
-
-      const payloadPath = path.join(recoveryPath, "payload");
-      const metrics = await scanTree(payloadPath);
-      if (metrics.entries !== manifest.entries || metrics.bytes !== manifest.bytes) {
-        throw new Error("Recovery payload verification failed");
-      }
-      const stagedDestination = path.join(path.dirname(destinationPath), `.${randomUUID()}.webgpt-restore`);
-      try {
-        await copyEntry(payloadPath, stagedDestination);
+      return withWorkspaceLock(workspaces, input.workspaceId, [recoveryPath], async (workspaceRoot) => {
+        const destinationPath = await workspaces.resolvePathForWrite(input.workspaceId, destination);
+        assertNotWorkspaceRoot(workspaceRoot, destinationPath);
         if (await pathExists(destinationPath)) throw new Error("Restore destination already exists");
-        await rename(stagedDestination, destinationPath);
-      } catch (error) {
-        await rm(stagedDestination, { recursive: true, force: true });
-        throw error;
-      }
-      await rm(recoveryPath, { recursive: true });
-      return {
-        recoveryId: input.recoveryId,
-        originalPath: manifest.originalPath,
-        restoredPath: normalizeToolPath(destination),
-        type: manifest.type,
-        ...metrics,
-      };
+
+        const payloadPath = path.join(recoveryPath, "payload");
+        const metrics = await scanTree(payloadPath);
+        if (metrics.entries !== manifest.entries || metrics.bytes !== manifest.bytes) {
+          throw new Error("Recovery payload verification failed");
+        }
+        const stagedDestination = path.join(path.dirname(destinationPath), `.${randomUUID()}.webgpt-restore`);
+        const stagingEntries: OwnedEntry[] = [];
+        try {
+          await copyEntry(payloadPath, stagedDestination, undefined, false, stagingEntries);
+          await commitStagedEntry(stagedDestination, destinationPath);
+        } catch (error) {
+          const cleanupErrors = await rollbackOwnedEntries(stagingEntries);
+          if (cleanupErrors.length > 0) {
+            const originalMessage = error instanceof Error ? error.message : "restore failed";
+            throw new Error(`${originalMessage}; cleanup errors: ${cleanupErrors.join("; ")}`);
+          }
+          throw error;
+        }
+        const cleanupErrors = await rollbackOwnedEntries(stagingEntries);
+        if (cleanupErrors.length > 0) {
+          throw new Error(`Restore staging cleanup failed: ${cleanupErrors.join("; ")}`);
+        }
+        await removeEntry(recoveryPath, true);
+        return {
+          recoveryId: input.recoveryId,
+          originalPath: manifest.originalPath,
+          restoredPath: normalizeToolPath(destination),
+          type: manifest.type,
+          ...metrics,
+        };
+      });
     },
 
     async readMany(input: ReadManyInput): Promise<ReadManyResult> {
@@ -950,9 +1510,11 @@ export function createFileService(
     },
 
     async applyPatch(input: ApplyPatchInput): Promise<ApplyPatchResult> {
-      if (input.operations.length < 1 || input.operations.length > MAX_PATCH_OPERATIONS) {
+      if (!Array.isArray(input.operations)
+        || input.operations.length < 1 || input.operations.length > MAX_PATCH_OPERATIONS) {
         throw new Error(`operations must contain between 1 and ${MAX_PATCH_OPERATIONS} items`);
       }
+      return withWorkspaceLock(workspaces, input.workspaceId, [], async () => {
       const seenPaths = new Set<string>();
       const prepared: PreparedPatchOperation[] = [];
       let totalNewBytes = 0;
@@ -987,6 +1549,7 @@ export function createFileService(
         }
         const beforeContent = await readBoundedText(targetPath);
         const bytesBefore = Buffer.byteLength(beforeContent, "utf8");
+        const beforeFingerprint = fingerprint(targetStats);
 
         if (operation.op === "edit_file") {
           if (operation.oldText.length === 0) throw new Error("Patch oldText must not be empty");
@@ -1002,6 +1565,7 @@ export function createFileService(
             operation,
             targetPath,
             beforeContent,
+            beforeFingerprint,
             afterContent,
             change: { op: operation.op, path: normalizedPath, bytesBefore, bytesAfter },
           });
@@ -1016,6 +1580,7 @@ export function createFileService(
           operation,
           targetPath,
           beforeContent,
+          beforeFingerprint,
           change: { op: operation.op, path: normalizedPath, bytesBefore, bytesAfter: 0 },
         });
       }
@@ -1027,23 +1592,42 @@ export function createFileService(
       if (input.dryRun === true) return { dryRun: true, applied: false, changes };
 
       const applied: PreparedPatchOperation[] = [];
+      const appliedFingerprints = new Map<PreparedPatchOperation, EntryFingerprint>();
       try {
         for (const entry of prepared) {
           if (entry.operation.op === "create_file") {
             if (await pathExists(entry.targetPath)) {
               throw new Error(`Patch target changed before apply: ${entry.change.path}`);
             }
-            await atomicReplace(workspaces, input.workspaceId, entry.operation.path, entry.afterContent ?? "");
+            await atomicReplace(
+              workspaces,
+              input.workspaceId,
+              entry.operation.path,
+              entry.afterContent ?? "",
+              { noReplace: true },
+            );
           } else {
+            const currentStats = await lstat(entry.targetPath);
             const currentContent = await readBoundedText(entry.targetPath);
-            if (currentContent !== entry.beforeContent) {
+            if (entry.beforeFingerprint === undefined
+              || !sameFingerprint(fingerprint(currentStats), entry.beforeFingerprint)
+              || currentContent !== entry.beforeContent) {
               throw new Error(`Patch target changed before apply: ${entry.change.path}`);
             }
             if (entry.operation.op === "edit_file") {
-              await atomicReplace(workspaces, input.workspaceId, entry.operation.path, entry.afterContent ?? "");
+              await atomicReplace(
+                workspaces,
+                input.workspaceId,
+                entry.operation.path,
+                entry.afterContent ?? "",
+                { expectedContent: entry.beforeContent },
+              );
             } else {
               await unlink(entry.targetPath);
             }
+          }
+          if (entry.operation.op !== "delete_file") {
+            appliedFingerprints.set(entry, fingerprint(await lstat(entry.targetPath)));
           }
           applied.push(entry);
         }
@@ -1053,13 +1637,39 @@ export function createFileService(
           try {
             if (entry.operation.op === "create_file") {
               const rollbackPath = await workspaces.resolveEntryPath(input.workspaceId, entry.operation.path);
+              const rollbackStats = await lstat(rollbackPath);
+              const appliedFingerprint = appliedFingerprints.get(entry);
+              if (appliedFingerprint === undefined
+                || !sameFingerprint(fingerprint(rollbackStats), appliedFingerprint)
+                || await readBoundedText(rollbackPath) !== entry.afterContent) {
+                throw new Error(`Patch rollback conflict: ${entry.change.path}`);
+              }
               await unlink(rollbackPath);
-            } else {
+            } else if (entry.operation.op === "edit_file") {
+              const currentStats = await lstat(entry.targetPath);
+              const appliedFingerprint = appliedFingerprints.get(entry);
+              if (appliedFingerprint === undefined
+                || !sameFingerprint(fingerprint(currentStats), appliedFingerprint)
+                || await readBoundedText(entry.targetPath) !== entry.afterContent) {
+                throw new Error(`Patch rollback conflict: ${entry.change.path}`);
+              }
               await atomicReplace(
                 workspaces,
                 input.workspaceId,
                 entry.operation.path,
                 entry.beforeContent ?? "",
+                { expectedContent: entry.afterContent },
+              );
+            } else {
+              if (await pathExists(entry.targetPath)) {
+                throw new Error(`Patch rollback conflict: ${entry.change.path}`);
+              }
+              await atomicReplace(
+                workspaces,
+                input.workspaceId,
+                entry.operation.path,
+                entry.beforeContent ?? "",
+                { noReplace: true },
               );
             }
           } catch (rollbackError) {
@@ -1073,6 +1683,7 @@ export function createFileService(
         throw error;
       }
       return { dryRun: false, applied: true, changes };
+      });
     },
   };
 }

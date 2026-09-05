@@ -120,6 +120,7 @@ export type SetupBlockerCode =
   | "ACTIVE_SESSION"
   | "CREDENTIAL_REENTRY_REQUIRED"
   | "FINGERPRINT_MISMATCH"
+  | "OUTCOME_UNKNOWN"
   | "RECONCILIATION_REQUIRED"
   | "APPLY_FAILED"
   | "MANUAL_OR_UAC_REQUIRED"
@@ -185,12 +186,13 @@ export interface SetupJournalEntry {
   to?: SetupStatus;
   resource?: Omit<SetupReceiptResource, "reason"> & { reason?: string };
   rollbackData?: {
-    kind: "tunnel_config" | "dns";
+    kind: "tunnel_config" | "dns" | "toolspan_config";
     resourceId: string;
     accountId?: string;
     zoneId?: string;
     previousTunnelConfig?: import("./cloudflare-adapter.js").CloudflareTunnelConfig;
     previousDnsRecord?: import("./cloudflare-adapter.js").CloudflareDnsRecord;
+    previousPublicBaseUrl?: string;
     appliedFingerprint: string;
   };
   detail?: string;

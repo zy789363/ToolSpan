@@ -58,6 +58,20 @@ function requestedPath(workspaceRoot: string, relativePath: string): string {
   return requested;
 }
 
+async function assertSafeWriteTarget(targetPath: string, workspaceRoot: string): Promise<void> {
+  try {
+    const targetStats = await lstat(targetPath);
+    if (targetStats.isSymbolicLink()) throw new Error("Path is a symbolic link");
+    const canonicalTarget = await realpath(targetPath);
+    if (comparisonPath(canonicalTarget) !== comparisonPath(targetPath)
+      || !isWithin(canonicalTarget, workspaceRoot)) {
+      throw new Error("Path is a reparse point");
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
+
 export async function createPathGuard(allowedRoots: readonly string[]): Promise<PathGuard> {
   if (allowedRoots.length === 0) {
     throw new Error("At least one allowed root is required");
@@ -114,7 +128,9 @@ export async function createPathGuard(allowedRoots: readonly string[]): Promise<
       if (!isWithin(canonicalParent, workspaceRoot)) {
         throw new Error("Path escapes workspace");
       }
-      return path.join(canonicalParent, path.basename(requestedTarget));
+      const targetPath = path.join(canonicalParent, path.basename(requestedTarget));
+      await assertSafeWriteTarget(targetPath, workspaceRoot);
+      return targetPath;
     },
 
     async resolveForCreate(workspaceRoot: string, relativePath: string): Promise<string> {
@@ -131,7 +147,9 @@ export async function createPathGuard(allowedRoots: readonly string[]): Promise<
           if (!isWithin(canonicalAncestor, workspaceRoot)) {
             throw new Error("Path escapes workspace");
           }
-          return path.join(canonicalAncestor, ...missingSegments.reverse());
+          const targetPath = path.join(canonicalAncestor, ...missingSegments.reverse());
+          await assertSafeWriteTarget(targetPath, workspaceRoot);
+          return targetPath;
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
           const parent = path.dirname(ancestor);

@@ -25,6 +25,31 @@ async function reservePort(): Promise<number> {
   return address.port;
 }
 
+async function createRuntimeFixture(): Promise<{
+  directory: string;
+  configPath: string;
+  config: Record<string, unknown>;
+}> {
+  const directory = await mkdtemp(path.join(tmpdir(), "toolspan-desktop-lifecycle-"));
+  temporaryDirectories.push(directory);
+  await mkdir(path.join(directory, "projects"));
+  await mkdir(path.join(directory, "secrets"));
+  await writeFile(path.join(directory, "secrets", "owner.bcrypt"), await hash("owner-password", 4));
+  const port = await reservePort();
+  const configPath = path.join(directory, "toolspan.config.json");
+  const config = {
+    instanceName: "desktop-test",
+    host: "127.0.0.1",
+    port,
+    publicBaseUrl: `http://127.0.0.1:${String(port)}`,
+    allowedRoots: ["./projects"],
+    stateDirectory: "./state",
+    ownerPasswordHashFile: "./secrets/owner.bcrypt",
+  };
+  await writeFile(configPath, JSON.stringify(config));
+  return { directory, configPath, config };
+}
+
 describe("Desktop production service", () => {
   it("routes only the frozen setup methods through the injected setup bridge", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "toolspan-desktop-setup-host-"));
@@ -136,6 +161,75 @@ describe("Desktop production service", () => {
       expect(logs.chunk).toContain("CONFIG_INVALID");
       expect(logs.chunk).not.toContain(missingRoot);
       expect(await readFile(logPath, "utf8")).toContain("CONFIG_INVALID");
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("serializes concurrent runtime lifecycle requests", async () => {
+    const fixture = await createRuntimeFixture();
+    const service = createDesktopProductionService({ configPath: fixture.configPath });
+
+    try {
+      const started = await Promise.all([
+        service.invoke("runtime.start", {}) as Promise<{ state: string }>,
+        service.invoke("runtime.start", {}) as Promise<{ state: string }>,
+      ]);
+      expect(started.map((result) => result.state)).toEqual(["running", "running"]);
+
+      const lifecycle = await Promise.all([
+        service.invoke("runtime.stop", {}) as Promise<{ state: string }>,
+        service.invoke("runtime.restart", {}) as Promise<{ state: string }>,
+      ]);
+      expect(lifecycle.map((result) => result.state)).toEqual(["stopped", "running"]);
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("loads the current config while a runtime is active", async () => {
+    const fixture = await createRuntimeFixture();
+    const service = createDesktopProductionService({ configPath: fixture.configPath });
+
+    try {
+      await service.invoke("runtime.start", {});
+      const updatedPublicBaseUrl = "http://localhost:8787";
+      await writeFile(fixture.configPath, JSON.stringify({
+        ...fixture.config,
+        publicBaseUrl: updatedPublicBaseUrl,
+      }));
+
+      await expect(service.invoke("runtime.getConfigSummary", {})).resolves.toMatchObject({
+        publicBaseUrl: updatedPublicBaseUrl,
+      });
+      await expect(service.invoke("runtime.getSnapshot", {})).resolves.toMatchObject({
+        publicBaseUrl: updatedPublicBaseUrl,
+      });
+    } finally {
+      await service.close();
+    }
+  });
+
+  it("does not restart an active runtime for an injected setup service", async () => {
+    const fixture = await createRuntimeFixture();
+    const invoke = vi.fn(async () => ({ status: "COMPLETE" }));
+    const service = createDesktopProductionService({
+      configPath: fixture.configPath,
+      setupService: { invoke },
+    });
+    const snapshotStates: string[] = [];
+    service.subscribeEvents?.((event) => {
+      if (event.event === "runtime.snapshot") {
+        snapshotStates.push((event.data as { state: string }).state);
+      }
+    });
+
+    try {
+      await service.invoke("runtime.start", {});
+      const beforeSetup = snapshotStates.length;
+      await service.invoke("setup.apply", {});
+      expect(invoke).toHaveBeenCalledWith("setup.apply", {});
+      expect(snapshotStates).toHaveLength(beforeSetup);
     } finally {
       await service.close();
     }

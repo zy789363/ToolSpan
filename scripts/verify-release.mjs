@@ -5,6 +5,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { resolveNpmCli, verificationEnvironment } from "./desktop-install.mjs";
 import { npmCommand } from "./desktop-verification-utils.mjs";
+import {
+  collectDistProvenance,
+  collectSourceProvenance,
+  compareDistProvenance,
+  compareSourceProvenance,
+  validateDistProvenance,
+  validateSourceProvenance,
+} from "./release-dry-run.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 export const projectRoot = path.resolve(scriptDirectory, "..");
@@ -549,6 +557,66 @@ export function validateLatestDryRunPointer(value) {
     && value.report === `${value.runDirectory}/artifact-manifest.json`;
 }
 
+async function verifyCurrentBuildProvenance(manifest, desktopManifest, options, environment) {
+  const expectedSource = manifest.sourceProvenance;
+  const desktopSource = desktopManifest.sourceProvenance;
+  if (expectedSource !== undefined || desktopSource !== undefined) {
+    if (expectedSource === undefined || desktopSource === undefined
+      || !validateSourceProvenance(expectedSource)
+      || !validateSourceProvenance(desktopSource)
+      || !compareSourceProvenance(expectedSource, desktopSource).match) {
+      return { reason: "RELEASE_SOURCE_PROVENANCE_INVALID" };
+    }
+    let currentSource;
+    try {
+      currentSource = options.currentSourceProvenance
+        ?? options.sourceProvenance
+        ?? await collectSourceProvenance({
+          environment,
+          runner: options.provenanceRunner,
+        });
+    } catch {
+      return { reason: "RELEASE_SOURCE_PROVENANCE_UNAVAILABLE" };
+    }
+    const sourceComparison = compareSourceProvenance(expectedSource, currentSource);
+    if (!sourceComparison.match) {
+      return {
+        reason: "RELEASE_SOURCE_PROVENANCE_MISMATCH",
+        mismatches: sourceComparison.mismatches,
+      };
+    }
+  }
+
+  const expectedDist = manifest.distProvenance;
+  const desktopDist = desktopManifest.distProvenance;
+  if (expectedDist !== undefined || desktopDist !== undefined) {
+    if (expectedDist === undefined || desktopDist === undefined
+      || !validateDistProvenance(expectedDist, manifest.toolSpanVersion)
+      || !validateDistProvenance(desktopDist, manifest.toolSpanVersion)
+      || !compareDistProvenance(expectedDist, desktopDist).match) {
+      return { reason: "RELEASE_DIST_PROVENANCE_INVALID" };
+    }
+    let currentDist;
+    try {
+      currentDist = options.currentDistProvenance
+        ?? await collectDistProvenance({
+          environment,
+          toolSpanVersion: manifest.toolSpanVersion,
+        });
+    } catch {
+      return { reason: "RELEASE_DIST_PROVENANCE_UNAVAILABLE" };
+    }
+    const distComparison = compareDistProvenance(expectedDist, currentDist);
+    if (!distComparison.match) {
+      return {
+        reason: "RELEASE_DIST_PROVENANCE_MISMATCH",
+        mismatches: distComparison.mismatches,
+      };
+    }
+  }
+  return null;
+}
+
 export async function verifyRelease(options = {}) {
   const environment = verificationEnvironment(options.environment ?? process.env);
   const npmCli = options.npmCli ?? await resolveNpmCli(environment);
@@ -608,6 +676,22 @@ export async function verifyRelease(options = {}) {
   });
   if (currentReleaseContext === null) {
     return { status: "FAIL", reason: "RELEASE_DRY_RUN_NATIVE_CONTEXT_INVALID", releaseReady: false, exitCode: 1 };
+  }
+
+  const provenanceFailure = await verifyCurrentBuildProvenance(
+    manifest,
+    desktopManifest,
+    options,
+    environment,
+  );
+  if (provenanceFailure !== null) {
+    return {
+      status: "FAIL",
+      reason: provenanceFailure.reason,
+      mismatches: provenanceFailure.mismatches,
+      releaseReady: false,
+      exitCode: 1,
+    };
   }
 
   const now = options.now ?? new Date();

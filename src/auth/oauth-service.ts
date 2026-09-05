@@ -408,6 +408,7 @@ export function createOAuthService(options: OAuthServiceOptions): OAuthService {
         ) {
           throw new OAuthRequestError("invalid_grant", "Refresh token is invalid");
         }
+        let scopes = refresh.scopes as OAuthAuthorizationScope[];
         if (input.scope !== undefined) {
           const requestedScopes = parseScopes(input.scope);
           const grantedScopes = new Set(refresh.scopes);
@@ -417,11 +418,12 @@ export function createOAuthService(options: OAuthServiceOptions): OAuthService {
               "Refresh scope exceeds the originally granted scopes",
             );
           }
+          scopes = requestedScopes;
         }
         if (!store.revokeToken(tokenHash)) {
           throw new OAuthRequestError("invalid_grant", "Refresh token is invalid");
         }
-        return issueTokens(client.clientId, refresh.scopes as OAuthAuthorizationScope[]);
+        return issueTokens(client.clientId, scopes);
       }
       throw new OAuthRequestError("unsupported_grant_type", "Grant type is not supported");
     },

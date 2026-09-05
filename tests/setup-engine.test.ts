@@ -12,9 +12,11 @@ import {
   type SetupService as SetupServiceType,
 } from "../src/setup/index.js";
 import { FakeCloudflareAdapter, FakeCloudflaredAdapter } from "./fixtures/setup/fake-adapters.js";
+import { CloudflareOutcomeUnknownError } from "../src/setup/cloudflare-fetch-adapter.js";
 
 const temporaryDirectories: string[] = [];
 const testCredential = { kind: "api_token" as const, token: "test-management-token" };
+const testWritePublicMcpOrigin = async (_origin: string): Promise<void> => undefined;
 
 function setupManifest(overrides: Partial<SetupManifestDraft> = {}): SetupManifestDraft {
   return {
@@ -35,6 +37,8 @@ function setupManifest(overrides: Partial<SetupManifestDraft> = {}): SetupManife
 async function setupHarness(options: {
   cloudflare?: FakeCloudflareAdapter;
   cloudflared?: FakeCloudflaredAdapter;
+  writePublicMcpOrigin?: (origin: string) => Promise<void>;
+  readPublicMcpOrigin?: () => Promise<string>;
   processInspector?: { isAlive(pid: number): boolean };
 } = {}) {
   const directory = await mkdtemp(path.join(tmpdir(), "toolspan-setup-"));
@@ -45,6 +49,9 @@ async function setupHarness(options: {
     directory,
     cloudflare,
     cloudflared,
+    writePublicMcpOrigin: testWritePublicMcpOrigin,
+    ...(options.writePublicMcpOrigin === undefined ? {} : { writePublicMcpOrigin: options.writePublicMcpOrigin }),
+    ...(options.readPublicMcpOrigin === undefined ? {} : { readPublicMcpOrigin: options.readPublicMcpOrigin }),
     ...(options.processInspector === undefined ? {} : { processInspector: options.processInspector }),
   });
   return { directory, cloudflare, cloudflared, service };
@@ -105,7 +112,12 @@ describe("SetupService", () => {
     temporaryDirectories.push(directory);
     const cloudflare = new FakeCloudflareAdapter();
     const cloudflared = new FakeCloudflaredAdapter();
-    const service = createSetupService({ directory, cloudflare, cloudflared });
+    const service = createSetupService({
+      directory,
+      cloudflare,
+      cloudflared,
+      writePublicMcpOrigin: testWritePublicMcpOrigin,
+    });
     const credential = { kind: "api_token" as const, token: "test-token-not-a-secret" };
 
     const preflight = await service.preflight({
@@ -149,6 +161,7 @@ describe("SetupService", () => {
       directory,
       cloudflare,
       cloudflared: new FakeCloudflaredAdapter(),
+      writePublicMcpOrigin: testWritePublicMcpOrigin,
     });
     const credential = { kind: "api_token" as const, token: "test-token-not-a-secret" };
     const preflight = await service.preflight({
@@ -186,7 +199,12 @@ describe("SetupService", () => {
     temporaryDirectories.push(directory);
     const cloudflare = new FakeCloudflareAdapter();
     const cloudflared = new FakeCloudflaredAdapter();
-    const service = createSetupService({ directory, cloudflare, cloudflared });
+    const service = createSetupService({
+      directory,
+      cloudflare,
+      cloudflared,
+      writePublicMcpOrigin: testWritePublicMcpOrigin,
+    });
     const credential = { kind: "api_token" as const, token: "apply-only-test-token" };
     const preflight = await service.preflight({
       sessionId: "session-apply",
@@ -231,6 +249,39 @@ describe("SetupService", () => {
         ]),
       }),
     );
+  });
+
+  it("writes the Core public origin before marking Apply complete", async () => {
+    const writtenOrigins: string[] = [];
+    const harness = await setupHarness({
+      writePublicMcpOrigin: async (origin) => { writtenOrigins.push(origin); },
+      readPublicMcpOrigin: async () => "http://127.0.0.1:8787",
+    });
+    const preflight = await preflightSession(harness.service, "public-origin");
+    await harness.service.plan({ sessionId: preflight.sessionId });
+
+    await expect(harness.service.apply({
+      sessionId: preflight.sessionId,
+      confirmation: "APPLY",
+      credential: testCredential,
+    })).resolves.toMatchObject({
+      status: "COMPLETE",
+    });
+    expect(writtenOrigins).toEqual(["https://mcp.example.test"]);
+  });
+
+  it("blocks a manual cloudflared boundary before planning remote mutations", async () => {
+    const cloudflared = new FakeCloudflaredAdapter() as FakeCloudflaredAdapter & {
+      automationMode: "manual";
+    };
+    cloudflared.automationMode = "manual";
+    const harness = await setupHarness({ cloudflared });
+    const preflight = await preflightSession(harness.service, "manual-boundary");
+
+    await expect(harness.service.plan({ sessionId: preflight.sessionId })).rejects.toMatchObject({
+      code: "MANUAL_OR_UAC_REQUIRED",
+    });
+    expect(harness.cloudflare.mutationCalls).toEqual([]);
   });
 
   it("stops planning when the Cloudflare zone is missing", async () => {
@@ -331,6 +382,7 @@ describe("SetupService", () => {
       directory: harness.directory,
       cloudflare: harness.cloudflare,
       cloudflared: harness.cloudflared,
+      writePublicMcpOrigin: testWritePublicMcpOrigin,
     });
 
     expect((await restarted.snapshot({ sessionId: preflight.sessionId }))?.status).toBe("NEEDS_CREDENTIAL_REENTRY");
@@ -645,6 +697,7 @@ describe("SetupService", () => {
       directory: harness.directory,
       cloudflare: harness.cloudflare,
       cloudflared: harness.cloudflared,
+      writePublicMcpOrigin: testWritePublicMcpOrigin,
       processInspector: { isAlive: () => false },
     });
     const recovered = await restarted.snapshot({ sessionId: preflight.sessionId });
@@ -731,7 +784,21 @@ describe("SetupService", () => {
       harness.service.apply({ sessionId: preflight.sessionId, confirmation: "APPLY", credential: testCredential }),
     ).rejects.toThrow("fake ingress failure");
     expect((await harness.service.snapshot({ sessionId: preflight.sessionId }))?.status).toBe("NEEDS_RECONCILIATION");
-    expect(harness.cloudflare.mutationCalls).toEqual(["createTunnel"]);
+  });
+
+  it("persists an unknown Cloudflare create outcome as a reconciliation blocker", async () => {
+    const harness = await setupHarness();
+    harness.cloudflare.failures.set("createTunnel", new CloudflareOutcomeUnknownError("tunnel create"));
+    const preflight = await preflightSession(harness.service, "unknown-create");
+    await harness.service.plan({ sessionId: preflight.sessionId });
+
+    await expect(
+      harness.service.apply({ sessionId: preflight.sessionId, confirmation: "APPLY", credential: testCredential }),
+    ).rejects.toMatchObject({ code: "OUTCOME_UNKNOWN" });
+    expect(await harness.service.snapshot({ sessionId: preflight.sessionId })).toMatchObject({
+      status: "NEEDS_RECONCILIATION",
+      blocker: { code: "OUTCOME_UNKNOWN" },
+    });
   });
 
   it("journals tunnel runtime credential retrieval failure without installing a service", async () => {

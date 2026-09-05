@@ -1,6 +1,6 @@
 # ToolSpan 连接助手手册
 
-本目录描述 v0.6.0 的连接辅助流程。ToolSpan 是 MCP Server 与本地桌面控制面，不是 MCP Client、Gateway、Agent Runtime 或 Shell。Cloudflare 是可选的 BYO 公网路径；Headless Core 不依赖 Cloudflare、NameSilo 或 ChatGPT。
+本目录描述当前 v0.7.1 的连接辅助流程。ToolSpan 是 MCP Server 与本地桌面控制面，不是 MCP Client、Gateway、Agent Runtime 或 Shell。Cloudflare 是可选的 BYO 公网路径；Headless Core 不依赖 Cloudflare、NameSilo 或 ChatGPT。
 
 ## 选择路径
 

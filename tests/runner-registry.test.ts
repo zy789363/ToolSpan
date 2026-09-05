@@ -24,6 +24,78 @@ describe("production runner registry", () => {
     });
   });
 
+  it("rejects dangerous Blender options in both bare and equals forms", () => {
+    const blender = createProductionRunners().blender;
+    expect(blender?.validateArgs(["--background", "--command"])).toBe(false);
+    expect(blender?.validateArgs(["--background", "--command=unsafe"])).toBe(false);
+    expect(blender?.validateArgs(["--background", "--addons=unsafe"])).toBe(false);
+    expect(blender?.validateArgs(["--background", "--enable-autoexec=true"])).toBe(false);
+  });
+
+  it("rejects unsafe assignment path values for every production runner", () => {
+    const runners = createProductionRunners();
+    const validArguments: Record<string, string[]> = {
+      shell: ["git", "status"],
+      svn: ["status"],
+      pytest: ["-q"],
+      blender: ["--background"],
+      npm: ["test"],
+      pnpm: ["test"],
+      yarn: ["test"],
+      cargo: ["test"],
+      dotnet: ["test"],
+    };
+    const unsafeValues = [
+      "C:\\absolute",
+      "C:/absolute",
+      "C:drive-relative",
+      "\\\\server\\share",
+      "//server/share",
+      "\\root-relative",
+      "..\\escape",
+      "../escape",
+      "nested/../escape",
+      "COM1.txt",
+      "COM¹.txt",
+      "COM².txt",
+      "COM³.txt",
+      "LPT1.txt",
+      "LPT¹.txt",
+      "LPT².txt",
+      "LPT³.txt",
+    ];
+
+    for (const [name, args] of Object.entries(validArguments)) {
+      const runner = runners[name];
+      for (const value of unsafeValues) {
+        expect(runner?.validateArgs([...args, `--workspace=${value}`])).toBe(false);
+      }
+      expect(runner?.validateArgs([...args, "--workspace=src"])).toBe(true);
+    }
+  });
+
+  it("provides a guarded read-only SVN runner with idempotent safety flags", async () => {
+    const svn = createProductionRunners().svn;
+    expect(svn).toBeDefined();
+    expect(svn?.validateArgs(["status"])).toBe(true);
+    expect(svn?.validateArgs(["diff"])).toBe(true);
+    expect(svn?.validateArgs(["diff", "--summarize", "--xml"])).toBe(true);
+    expect(svn?.validateArgs(["commit"])).toBe(false);
+    expect(svn?.validateArgs(["status", "--username", "user"])).toBe(false);
+    expect(svn?.validateArgs(["status", "--username=user"])).toBe(false);
+    expect(svn?.validateArgs(["status", "https://svn.example.test/repo"])).toBe(false);
+    expect(svn?.validateArgs(["diff", "--xml"])).toBe(false);
+    expect(svn?.validateArgs(["diff", "--summarize=true"])).toBe(false);
+    expect(svn?.validateArgs(["status", "--non-interactive", "--non-interactive"])).toBe(false);
+
+    const statusCommand = await svn?.resolveCommand?.(["status"], "C:\\project");
+    expect(statusCommand?.args).toEqual(["status", "--non-interactive"]);
+    const textDiffCommand = await svn?.resolveCommand?.(["diff"], "C:\\project");
+    expect(textDiffCommand?.args).toEqual(["diff", "--non-interactive", "--internal-diff"]);
+    const summaryCommand = await svn?.resolveCommand?.(["diff", "--summarize", "--xml"], "C:\\project");
+    expect(summaryCommand?.args).toEqual(["diff", "--non-interactive", "--summarize", "--xml"]);
+  });
+
   it("runs Windows package-manager CLIs through Node instead of command shims", async () => {
     if (process.platform !== "win32") return;
     const runners = createProductionRunners();
@@ -134,6 +206,7 @@ describe("production runner registry", () => {
       "pnpm",
       "pytest",
       "shell",
+      "svn",
       "yarn",
     ]);
   });

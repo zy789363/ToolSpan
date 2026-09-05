@@ -128,5 +128,8 @@ describe("workspace path guard", () => {
     await expect(guard.resolveExisting(workspace, "outside-link")).rejects.toThrow(
       "Path escapes workspace",
     );
+    await expect(guard.resolveForWrite(workspace, "outside-link")).rejects.toThrow(
+      "Path is a symbolic link",
+    );
   });
 });

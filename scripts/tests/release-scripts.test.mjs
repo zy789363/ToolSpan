@@ -13,6 +13,8 @@ import {
 } from "../check-test-environment.mjs";
 import {
   cargoComponentsFromMetadata,
+  compareDistProvenance,
+  compareSourceProvenance,
   createCycloneDxSbom,
   createSpdxSbom,
   deduplicateComponents,
@@ -22,9 +24,12 @@ import {
   scanNpmTarball,
   scanReleaseText,
   validatePackedFiles,
+  validateDistProvenance,
+  validateReleaseVersions,
   validateCycloneDx16Sbom,
   validateReleaseCommandPlan,
   validateReleaseLifecycleScripts,
+  validateSourceProvenance,
   validateSpdx23Sbom,
 } from "../release-dry-run.mjs";
 import {
@@ -143,6 +148,63 @@ test("verify:all:source runs goal, Core, Desktop and Setup leaves in order witho
     "verify:desktop:source",
     "verify:setup",
   ]);
+});
+
+test("release provenance is content-only, detects worktree drift, and pins source/dist versions", () => {
+  const source = {
+    schemaVersion: "1.0",
+    gitHead: "a".repeat(40),
+    sourceTreeSha256: "b".repeat(64),
+    sourceFileCount: 10,
+    dirty: true,
+    statusSha256: "c".repeat(64),
+    statusEntryCount: 2,
+  };
+  const dist = {
+    schemaVersion: "1.0",
+    toolSpanVersion: "0.7.1",
+    root: {
+      directory: "dist",
+      fileCount: 3,
+      sha256: "d".repeat(64),
+      serviceInfoVersion: "0.7.1",
+    },
+    renderer: {
+      directory: "apps/desktop/dist",
+      fileCount: 3,
+      sha256: "e".repeat(64),
+      sourceMapFiles: 1,
+      mappedSourceFiles: 2,
+    },
+  };
+  assert.equal(validateSourceProvenance(source), true);
+  assert.equal(compareSourceProvenance(source, { ...source, sourceTreeSha256: "f".repeat(64) }).match, false);
+  assert.equal(validateDistProvenance(dist, "0.7.1"), true);
+  assert.equal(compareDistProvenance(dist, { ...dist, root: { ...dist.root, sha256: "1".repeat(64) } }).match, false);
+  assert.deepEqual(validateReleaseVersions({
+    rootPackageVersion: "0.7.1",
+    desktopPackageVersion: "0.7.1",
+    tauriVersion: "0.7.1",
+    cargoVersion: "0.7.1",
+    distVersion: "0.7.0",
+  }), ["RELEASE_VERSION_MISMATCH:DIST"]);
+  for (const field of ["desktopPackageVersion", "tauriVersion", "cargoVersion", "distVersion"]) {
+    assert.deepEqual(validateReleaseVersions({
+      rootPackageVersion: "0.7.1",
+      desktopPackageVersion: "0.7.1",
+      tauriVersion: "0.7.1",
+      cargoVersion: "0.7.1",
+      distVersion: "0.7.1",
+      [field]: undefined,
+    }), [`RELEASE_VERSION_MISSING:${field.replace(/Version$/u, "").replace(/^desktopPackage$/u, "DESKTOP_PACKAGE").replace(/^tauri$/u, "TAURI").replace(/^cargo$/u, "CARGO").replace(/^dist$/u, "DIST").toUpperCase()}`]);
+  }
+  assert.deepEqual(validateReleaseVersions({
+    rootPackageVersion: "0.7.1",
+    desktopPackageVersion: "0.7.1",
+    tauriVersion: "0.7.1",
+    cargoVersion: "0.7.1",
+    distVersion: "",
+  }), ["RELEASE_VERSION_MISSING:DIST"]);
 });
 
 test("release dry-run command plan only builds and packs through resolved executables", () => {
@@ -1038,6 +1100,63 @@ test("verify:release binds E-WIN proof to the current dry-run manifests and comp
     { status: "PASS", proofValidated: false },
     { status: "FAIL", proofValidated: false },
   ]), 1);
+});
+
+test("verify:release fails closed when the current worktree provenance differs", async () => {
+  const evidenceRoot = path.join("C:\\synthetic", "release-provenance");
+  const latest = {
+    schemaVersion: "1.0",
+    status: "PASS",
+    scope: "RELEASE_DRY_RUN_ASSEMBLY",
+    dryRunOnly: true,
+    runDirectory: "run-test",
+    report: "run-test/artifact-manifest.json",
+  };
+  const sourceProvenance = {
+    schemaVersion: "1.0",
+    gitHead: "a".repeat(40),
+    sourceTreeSha256: "b".repeat(64),
+    sourceFileCount: 10,
+    dirty: true,
+    statusSha256: "c".repeat(64),
+    statusEntryCount: 1,
+  };
+  const artifactManifest = {
+    status: "PASS",
+    dryRunOnly: true,
+    tagCreated: false,
+    published: false,
+    toolSpanVersion: CURRENT_RELEASE_CONTEXT.toolSpanVersion,
+    sourceProvenance,
+  };
+  const desktopManifest = {
+    toolSpanVersion: CURRENT_RELEASE_CONTEXT.toolSpanVersion,
+    sourceProvenance,
+    nativeArtifacts: [
+      { targetName: "ToolSpan_0.5.0_x64_en-US.msi", sha256: CURRENT_RELEASE_CONTEXT.msiSha256 },
+      { targetName: "ToolSpan_0.5.0_x64-setup.exe", sha256: CURRENT_RELEASE_CONTEXT.nsisSha256 },
+    ],
+  };
+  const missing = Object.assign(new Error("missing"), { code: "ENOENT" });
+  const result = await verifyRelease({
+    npmCli: "C:\\node\\npm-cli.js",
+    now: TEST_NOW,
+    releaseEvidenceRoot: evidenceRoot,
+    runRoot: async () => {},
+    isFile: async () => true,
+    readFile: async (filePath) => {
+      if (filePath === path.join(evidenceRoot, "latest.json")) return JSON.stringify(latest);
+      if (filePath === path.join(evidenceRoot, "run-test", "artifact-manifest.json")) return JSON.stringify(artifactManifest);
+      if (filePath === path.join(evidenceRoot, "run-test", "desktop-bundles.manifest.json")) return JSON.stringify(desktopManifest);
+      if (filePath.endsWith("namesilo-offer.snapshot.json") || filePath.endsWith("openai-plan-usage.snapshot.json")) return "snapshot";
+      throw missing;
+    },
+    currentSourceProvenance: { ...sourceProvenance, sourceTreeSha256: "d".repeat(64) },
+  });
+  assert.equal(result.status, "FAIL");
+  assert.equal(result.reason, "RELEASE_SOURCE_PROVENANCE_MISMATCH");
+  assert.equal(result.releaseReady, false);
+  assert.equal(result.exitCode, 1);
 });
 
 test("active conditional claims prevent false RELEASE_READY after every mandatory gate passes", () => {

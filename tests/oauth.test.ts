@@ -129,6 +129,27 @@ describe("OAuth 2.1 server", () => {
     }
   });
 
+  it("accepts legal Host ports but rejects userinfo and malformed authorities", async () => {
+    const app = createHttpApp({ allowedHosts: ["trusted.example"] });
+
+    await request(app)
+      .get("/healthz")
+      .set("Host", "trusted.example:8443")
+      .expect(200);
+    await request(app)
+      .get("/healthz")
+      .set("Host", "evil.example@trusted.example")
+      .expect(403);
+    await request(app)
+      .get("/healthz")
+      .set("Host", "trusted.example/path")
+      .expect(403);
+    await request(app)
+      .get("/healthz")
+      .set("Host", "trusted.example:not-a-port")
+      .expect(403);
+  });
+
   it("shows the escaped client, redirect origin, and only the requested scopes", async () => {
     const { app, oauth } = await createFixture();
     try {
@@ -435,7 +456,7 @@ describe("OAuth 2.1 server", () => {
         response_type: "code",
         client_id: clientId,
         redirect_uri: "https://client.example/callback",
-        scope: "workspace:read offline_access",
+        scope: "workspace:read workspace:write offline_access",
         state: "offline-state",
         code_challenge: challenge,
         code_challenge_method: "S256",
@@ -461,9 +482,10 @@ describe("OAuth 2.1 server", () => {
           resource: authorization.resource,
         })
         .expect(200);
-      expect(initial.body.scope).toBe("workspace:read offline_access");
+      expect(initial.body.scope).toBe("workspace:read workspace:write offline_access");
       expect([...oauth.authenticate(`Bearer ${String(initial.body.access_token)}`).scopes]).toEqual([
         "workspace:read",
+        "workspace:write",
       ]);
 
       await request(app)
@@ -474,7 +496,7 @@ describe("OAuth 2.1 server", () => {
           refresh_token: initial.body.refresh_token,
           client_id: clientId,
           resource: authorization.resource,
-          scope: "workspace:read workspace:write",
+          scope: "workspace:read jobs:run",
         })
         .expect(400)
         .expect(({ body }) => expect(body.error).toBe("invalid_scope"));
@@ -492,7 +514,7 @@ describe("OAuth 2.1 server", () => {
         .expect(400)
         .expect(({ body }) => expect(body.error).toBe("invalid_scope"));
 
-      const refreshed = await request(app)
+      const preserved = await request(app)
         .post("/oauth/token")
         .type("form")
         .send({
@@ -502,15 +524,32 @@ describe("OAuth 2.1 server", () => {
           resource: authorization.resource,
         })
         .expect(200);
-      expect(refreshed.body).toEqual(
+      expect(preserved.body).toEqual(
         expect.objectContaining({
           access_token: expect.any(String),
           refresh_token: expect.any(String),
           scope: authorization.scope,
         }),
       );
-      expect(refreshed.body.refresh_token).not.toBe(initial.body.refresh_token);
-      expect([...oauth.authenticate(`Bearer ${String(refreshed.body.access_token)}`).scopes]).toEqual([
+      expect(preserved.body.refresh_token).not.toBe(initial.body.refresh_token);
+      expect([...oauth.authenticate(`Bearer ${String(preserved.body.access_token)}`).scopes]).toEqual([
+        "workspace:read",
+        "workspace:write",
+      ]);
+
+      const narrowed = await request(app)
+        .post("/oauth/token")
+        .type("form")
+        .send({
+          grant_type: "refresh_token",
+          refresh_token: preserved.body.refresh_token,
+          client_id: clientId,
+          resource: authorization.resource,
+          scope: "workspace:read",
+        })
+        .expect(200);
+      expect(narrowed.body.scope).toBe("workspace:read");
+      expect([...oauth.authenticate(`Bearer ${String(narrowed.body.access_token)}`).scopes]).toEqual([
         "workspace:read",
       ]);
 
@@ -531,7 +570,7 @@ describe("OAuth 2.1 server", () => {
         .type("form")
         .send({
           grant_type: "refresh_token",
-          refresh_token: refreshed.body.refresh_token,
+          refresh_token: narrowed.body.refresh_token,
           client_id: clientId,
           resource: authorization.resource,
         })

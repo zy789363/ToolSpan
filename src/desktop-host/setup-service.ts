@@ -1,6 +1,7 @@
 import type { CloudflareCredential } from "../setup/cloudflare-adapter.js";
 import { createCloudflareFetchAdapter } from "../setup/cloudflare-fetch-adapter.js";
 import { createManualCloudflaredAdapter } from "../setup/cloudflared-adapter.js";
+import { readPublicBaseUrl, writePublicBaseUrlAtomically } from "../setup/core-config-writer.js";
 import { createSetupService, type SetupService } from "../setup/setup-service.js";
 import type { SetupManifest } from "../setup/types.js";
 import type { DesktopServiceMethod } from "./host.js";
@@ -124,10 +125,12 @@ export function createDesktopSetupService(service: SetupService): DesktopSetupSe
   };
 }
 
-export function createProductionDesktopSetupService(directory: string): DesktopSetupService {
+export function createProductionDesktopSetupService(directory: string, configPath: string): DesktopSetupService {
   return createDesktopSetupService(createSetupService({
     directory,
     cloudflare: createCloudflareFetchAdapter(),
     cloudflared: createManualCloudflaredAdapter(),
+    readPublicMcpOrigin: () => readPublicBaseUrl(configPath),
+    writePublicMcpOrigin: (origin) => writePublicBaseUrlAtomically(configPath, origin),
   }));
 }

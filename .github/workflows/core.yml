@@ -67,6 +67,10 @@
           "run": "npm ci"
         },
         {
+          "name": "Run deterministic source helper tests",
+          "run": "npm run test:source-scripts"
+        },
+        {
           "name": "Initialize local goal state",
           "run": "node -e \"const fs=require('node:fs');fs.mkdirSync('.toolspan-dev',{recursive:true});fs.copyFileSync('examples/goal-state.example.json','.toolspan-dev/goal-state.json');\""
         },

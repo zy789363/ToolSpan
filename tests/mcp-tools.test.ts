@@ -250,6 +250,46 @@ describe("MCP tools", () => {
     }
   });
 
+  it("returns a stable safe error without exposing operation details", async () => {
+    const fixture = await createFixture();
+    try {
+      const opened = await rpc(fixture.app, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "open_workspace", arguments: { path: fixture.project } },
+      }).expect(200);
+      const workspaceId = opened.body.result.structuredContent.id as string;
+      const response = await rpc(fixture.app, {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: {
+          name: "read",
+          arguments: {
+            workspaceId,
+            path: "missing-secret.txt",
+          },
+        },
+      }).expect(200);
+
+      expect(response.body.result).toEqual({
+        content: [{ type: "text", text: "Tool execution failed" }],
+        structuredContent: {
+          error: {
+            code: "tool_execution_failed",
+            message: "Tool execution failed",
+          },
+        },
+        isError: true,
+      });
+      expect(JSON.stringify(response.body)).not.toContain(fixture.project);
+      expect(JSON.stringify(response.body)).not.toContain("missing-secret.txt");
+    } finally {
+      await fixture.close();
+    }
+  });
+
   it("returns a tool-level OAuth challenge when the token lacks the required scope", async () => {
     const fixture = await createFixture(true);
     try {

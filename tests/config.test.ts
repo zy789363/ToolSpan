@@ -189,4 +189,26 @@ describe("runtime configuration", () => {
 
     await expect(loadConfig(configPath)).rejects.toThrow(/state.*allowed root/i);
   });
+
+  it("closes already-created services when a later runtime service fails", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "toolspan-runtime-cleanup-"));
+    temporaryDirectories.push(directory);
+    await mkdir(path.join(directory, "projects"));
+    await mkdir(path.join(directory, "state"));
+    await mkdir(path.join(directory, "secrets"));
+    await writeFile(path.join(directory, "secrets", "owner.bcrypt"), await hash("owner-password", 4));
+    await writeFile(path.join(directory, "state", "artifacts"), "blocking file", "utf8");
+    const configPath = path.join(directory, "toolspan.config.json");
+    await writeFile(configPath, JSON.stringify({
+      instanceName: "cleanup-test",
+      publicBaseUrl: "https://mcp.example.test",
+      allowedRoots: ["./projects"],
+      stateDirectory: "./state",
+      ownerPasswordHashFile: "./secrets/owner.bcrypt",
+    }), "utf8");
+
+    const config = await loadConfig(configPath);
+    await expect(createRuntime(config)).rejects.toThrow();
+    await expect(rm(path.join(directory, "state"), { recursive: true, force: true })).resolves.toBeUndefined();
+  });
 });
